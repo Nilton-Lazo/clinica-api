@@ -31,8 +31,16 @@ class LoginController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         return response()->json([
-            'user' => $request->user(),
+            'id' => $user->id,
+            'username' => $user->username,
+            'nombres' => $user->nombres,
+            'apellido_paterno' => $user->apellido_paterno,
+            'apellido_materno' => $user->apellido_materno,
+            'nivel' => $user->nivel,
+            'estado' => $user->estado,
         ]);
     }
 }

@@ -68,14 +68,16 @@ class LoginService
         return [
             'user' => [
                 'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
                 'username' => $user->username,
+                'nombres' => $user->nombres,
+                'apellido_paterno' => $user->apellido_paterno,
+                'apellido_materno' => $user->apellido_materno,
                 'nivel' => $user->nivel,
                 'estado' => $user->estado,
             ],
             'token' => $token,
         ];
+        
     }
 
     public function logout(User $user): void
