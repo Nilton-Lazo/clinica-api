@@ -7,6 +7,17 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Script para ejecutar backend
+
+Agregar el siguiente script en composer.json para que todos los desarrolladores puedan ejecutar el backend con el comando **"composer serve"**
+```bash
+"scripts": {
+    "serve": [
+        "php artisan serve --host=0.0.0.0 --port=8000"
+    ]
+},
+```
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
