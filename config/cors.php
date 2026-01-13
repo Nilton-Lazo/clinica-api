@@ -17,7 +17,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [!empty($envOrigins) ? $envOrigins : $defaultOrigins],
+    'allowed_origins' => !empty($envOrigins) ? $envOrigins : $defaultOrigins,
 
     'allowed_origins_patterns' => [],
 
