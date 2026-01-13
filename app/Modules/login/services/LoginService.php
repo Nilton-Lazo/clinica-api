@@ -2,18 +2,21 @@
 
 namespace App\Modules\login\Services;
 
-use App\Models\User;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
 use App\Core\audit\Facades\Audit;
+use App\Models\User;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class LoginService
 {
-    public function login(string $identifier, string $password): array
+    public function login(string $identifier, string $password, ?string $deviceName = null): array
     {
         $field = filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
 
-        if (!Auth::attempt([$field => $identifier, 'password' => $password])) {
+        $user = User::where($field, $identifier)->first();
+
+        if (!$user || !Hash::check($password, $user->password)) {
             Audit::log(
                 action: 'auth.login.failed',
                 actionLabel: 'Login fallido',
@@ -29,11 +32,7 @@ class LoginService
             ]);
         }
 
-        $user = Auth::user();
-
         if ($user->estado !== 'activo') {
-            Auth::logout();
-
             Audit::log(
                 action: 'auth.login.blocked',
                 actionLabel: 'Login bloqueado por estado',
@@ -51,7 +50,16 @@ class LoginService
             ]);
         }
 
-        $token = $user->createToken('erp-api')->plainTextToken;
+        $tokenName = $deviceName ? ('erp-api:' . $this->normalizeTokenName($deviceName)) : 'erp-api';
+
+        $newToken = $user->createToken($tokenName);
+
+        $maxHours = (int) env('SESSION_MAX_HOURS', 8);
+        Cache::put(
+            'session:last_activity:' . $newToken->accessToken->id,
+            now()->toDateTimeString(),
+            now()->addHours($maxHours)
+        );
 
         Audit::log(
             action: 'auth.login.success',
@@ -60,6 +68,7 @@ class LoginService
             entityId: (string) $user->id,
             metadata: [
                 'nivel' => $user->nivel,
+                'token_name' => $tokenName,
             ],
             result: 'success',
             statusCode: 200
@@ -75,9 +84,8 @@ class LoginService
                 'nivel' => $user->nivel,
                 'estado' => $user->estado,
             ],
-            'token' => $token,
+            'token' => $newToken->plainTextToken,
         ];
-        
     }
 
     public function logout(User $user): void
@@ -92,5 +100,15 @@ class LoginService
             result: 'success',
             statusCode: 200
         );
+    }
+
+    private function normalizeTokenName(string $value): string
+    {
+        $v = trim($value);
+        if ($v === '') return 'device';
+
+        $v = preg_replace('/\s+/', ' ', $v) ?? $v;
+
+        return substr($v, 0, 60);
     }
 }

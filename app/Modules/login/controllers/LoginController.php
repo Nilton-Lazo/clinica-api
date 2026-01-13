@@ -12,35 +12,45 @@ class LoginController extends Controller
 {
     public function login(LoginRequest $request, LoginService $service): JsonResponse
     {
+        $deviceName = $request->header('X-ERP-Device') ?: ($request->userAgent() ?? 'unknown');
+
         $result = $service->login(
             $request->input('identifier'),
-            $request->input('password')
+            $request->input('password'),
+            $deviceName
         );
 
-        return response()->json($result);
+        return response()
+            ->json($result)
+            ->header('Cache-Control', 'no-store')
+            ->header('Pragma', 'no-cache');
     }
 
     public function logout(Request $request, LoginService $service): JsonResponse
     {
         $service->logout($request->user());
 
-        return response()->json([
-            'message' => 'Sesión cerrada',
-        ]);
+        return response()
+            ->json(['message' => 'Sesión cerrada'])
+            ->header('Cache-Control', 'no-store')
+            ->header('Pragma', 'no-cache');
     }
 
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        return response()->json([
-            'id' => $user->id,
-            'username' => $user->username,
-            'nombres' => $user->nombres,
-            'apellido_paterno' => $user->apellido_paterno,
-            'apellido_materno' => $user->apellido_materno,
-            'nivel' => $user->nivel,
-            'estado' => $user->estado,
-        ]);
+        return response()
+            ->json([
+                'id' => $user->id,
+                'username' => $user->username,
+                'nombres' => $user->nombres,
+                'apellido_paterno' => $user->apellido_paterno,
+                'apellido_materno' => $user->apellido_materno,
+                'nivel' => $user->nivel,
+                'estado' => $user->estado,
+            ])
+            ->header('Cache-Control', 'no-store')
+            ->header('Pragma', 'no-cache');
     }
 }
