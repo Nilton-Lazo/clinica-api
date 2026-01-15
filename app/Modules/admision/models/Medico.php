@@ -35,7 +35,7 @@ class Medico extends Model
     ];
 
     protected $casts = [
-        'fecha_nacimiento' => 'date',
+        'fecha_nacimiento' => 'date:Y-m-d',
         'adicionales' => 'integer',
         'extras' => 'integer',
         'tiempo_promedio_por_paciente' => 'integer',

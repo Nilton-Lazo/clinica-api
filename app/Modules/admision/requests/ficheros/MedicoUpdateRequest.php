@@ -19,7 +19,7 @@ class MedicoUpdateRequest extends FormRequest
         $id = $this->route('medico')?->id ?? $this->route('medico');
 
         return [
-            'codigo' => ['required', 'string', 'max:10', 'regex:/^[0-9A-Za-z\.\-_]+$/', Rule::unique('medicos', 'codigo')->ignore($id)],
+            'codigo' => ['prohibited'],
 
             'cmp' => ['nullable', 'string', 'max:20', Rule::unique('medicos', 'cmp')->ignore($id)],
             'rne' => ['nullable', 'string', 'max:20', Rule::unique('medicos', 'rne')->ignore($id)],

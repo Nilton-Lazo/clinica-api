@@ -21,6 +21,15 @@ class Consultorio extends Model
         'es_tercero' => 'boolean',
     ];
 
+    protected $appends = [
+        'es_terceros',
+    ];
+
+    public function getEsTercerosAttribute(): bool
+    {
+        return (bool) $this->es_tercero;
+    }
+
     public function scopeActivos(Builder $query): Builder
     {
         return $query->where('estado', RecordStatus::ACTIVO->value);

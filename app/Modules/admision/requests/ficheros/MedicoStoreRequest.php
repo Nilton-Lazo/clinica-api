@@ -17,7 +17,7 @@ class MedicoStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'codigo' => ['required', 'string', 'max:10', 'regex:/^[0-9A-Za-z\.\-_]+$/', 'unique:medicos,codigo'],
+            'codigo' => ['prohibited'],
 
             'cmp' => ['nullable', 'string', 'max:20', 'unique:medicos,cmp'],
             'rne' => ['nullable', 'string', 'max:20', 'unique:medicos,rne'],

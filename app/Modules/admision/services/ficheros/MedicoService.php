@@ -13,6 +13,36 @@ class MedicoService
 {
     public function __construct(private AuditService $audit) {}
 
+    private function formatCodigo(int $n): string
+    {
+        $codigo = str_pad((string)$n, 3, '0', STR_PAD_LEFT);
+        if (strlen($codigo) > 10) {
+            throw new \RuntimeException('No se pudo generar el código: excede 10 caracteres.');
+        }
+        return $codigo;
+    }
+
+    private function nextCodigo(): string
+    {
+        $row = DB::selectOne("SELECT nextval('medicos_codigo_seq') AS n");
+        $n = (int)($row->n ?? 1);
+        if ($n <= 0) $n = 1;
+
+        return $this->formatCodigo($n);
+    }
+
+    public function previewNextCodigo(): string
+    {
+        $row = DB::selectOne("SELECT last_value, is_called FROM medicos_codigo_seq");
+        $last = (int)($row->last_value ?? 0);
+        $isCalled = (bool)($row->is_called ?? true);
+
+        $next = $isCalled ? ($last + 1) : $last;
+        if ($next <= 0) $next = 1;
+
+        return $this->formatCodigo($next);
+    }
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $perPage = (int)($filters['per_page'] ?? 50);
@@ -57,7 +87,7 @@ class MedicoService
     {
         return DB::transaction(function () use ($data) {
             $medico = Medico::create([
-                'codigo' => $data['codigo'],
+                'codigo' => $this->nextCodigo(),
 
                 'cmp' => $data['cmp'] ?? null,
                 'rne' => $data['rne'] ?? null,
@@ -150,8 +180,6 @@ class MedicoService
             ]);
 
             $medico->fill([
-                'codigo' => $data['codigo'],
-
                 'cmp' => $data['cmp'] ?? null,
                 'rne' => $data['rne'] ?? null,
                 'dni' => $data['dni'] ?? null,

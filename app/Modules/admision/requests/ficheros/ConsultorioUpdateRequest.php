@@ -27,6 +27,10 @@ class ConsultorioUpdateRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if (!$this->has('es_tercero') && $this->has('es_terceros')) {
+            $this->merge(['es_tercero' => $this->boolean('es_terceros')]);
+        }
+
         if ($this->has('es_tercero')) {
             $this->merge(['es_tercero' => $this->boolean('es_tercero')]);
         }

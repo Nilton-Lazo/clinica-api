@@ -29,6 +29,10 @@ class ConsultorioStoreRequest extends FormRequest
             $this->merge(['estado' => RecordStatus::ACTIVO->value]);
         }
 
+        if (!$this->has('es_tercero') && $this->has('es_terceros')) {
+            $this->merge(['es_tercero' => $this->boolean('es_terceros')]);
+        }
+
         if (!$this->has('es_tercero') || $this->input('es_tercero') === null || $this->input('es_tercero') === '') {
             $this->merge(['es_tercero' => false]);
         } else {

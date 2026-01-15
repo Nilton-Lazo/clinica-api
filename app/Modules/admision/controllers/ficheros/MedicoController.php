@@ -56,4 +56,15 @@ class MedicoController extends Controller
 
         return response()->json(['data' => $updated]);
     }
+
+    public function nextCodigo()
+    {
+        $this->authorize('create', Medico::class);
+
+        $codigo = $this->service->previewNextCodigo();
+
+        return response()->json([
+            'data' => ['codigo' => $codigo],
+        ]);
+    }
 }
