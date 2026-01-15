@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])->group(function () {
     Route::prefix('ficheros')->group(function () {
         Route::get('especialidades', [EspecialidadController::class, 'index'])->middleware('throttle:api');
+        Route::get('especialidades/next-codigo', [EspecialidadController::class, 'nextCodigo'])->middleware('throttle:api');
         Route::post('especialidades', [EspecialidadController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::put('especialidades/{especialidad}', [EspecialidadController::class, 'update'])->middleware('throttle:sensitive-write');
         Route::patch('especialidades/{especialidad}/desactivar', [EspecialidadController::class, 'deactivate'])->middleware('throttle:sensitive-write');
@@ -21,10 +22,10 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::patch('consultorios/{consultorio}/desactivar', [ConsultorioController::class, 'deactivate'])->middleware('throttle:sensitive-write');
 
         Route::get('medicos', [MedicoController::class, 'index'])->middleware('throttle:api');
+        Route::get('medicos/next-codigo', [MedicoController::class, 'nextCodigo']);
         Route::post('medicos', [MedicoController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::put('medicos/{medico}', [MedicoController::class, 'update'])->middleware('throttle:sensitive-write');
-        Route::patch('medicos/{medico}/desactivar', [MedicoController::class, 'deactivate'])->middleware('throttle:sensitive-write');
-        Route::get('medicos/next-codigo', [MedicoController::class, 'nextCodigo']);
+        Route::patch('medicos/{medico}/desactivar', [MedicoController::class, 'deactivate'])->middleware('throttle:sensitive-write');   
 
         Route::get('turnos', [TurnoController::class, 'index'])->middleware('throttle:api');
         Route::post('turnos', [TurnoController::class, 'store'])->middleware('throttle:sensitive-write');

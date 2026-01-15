@@ -16,7 +16,6 @@ class EspecialidadStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'codigo' => ['required', 'string', 'max:10', 'regex:/^[0-9A-Za-z\.\-_]+$/', 'unique:especialidades,codigo'],
             'descripcion' => ['required', 'string', 'max:255'],
             'estado' => ['sometimes', 'string', Rule::in(RecordStatus::values())],
         ];

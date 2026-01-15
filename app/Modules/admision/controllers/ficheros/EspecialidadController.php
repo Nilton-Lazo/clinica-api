@@ -30,6 +30,17 @@ class EspecialidadController extends Controller
         ]);
     }
 
+    public function nextCodigo()
+    {
+        $this->authorize('create', Especialidad::class);
+
+        return response()->json([
+            'data' => [
+                'codigo' => $this->service->peekNextCodigo(),
+            ],
+        ]);
+    }
+
     public function store(EspecialidadStoreRequest $request)
     {
         $this->authorize('create', Especialidad::class);

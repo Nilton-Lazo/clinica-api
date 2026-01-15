@@ -12,6 +12,45 @@ class EspecialidadService
 {
     public function __construct(private AuditService $audit) {}
 
+    private function formatCodigo(int $n): string
+    {
+        $codigo = str_pad((string)$n, 3, '0', STR_PAD_LEFT);
+
+        if (strlen($codigo) > 10) {
+            throw new \RuntimeException('No se pudo generar el código: excede 10 caracteres.');
+        }
+
+        return $codigo;
+    }
+
+    private function nextCodigo(): string
+    {
+        $row = DB::selectOne("SELECT nextval('especialidades_codigo_seq') AS n");
+        $n = (int)($row->n ?? 0);
+
+        if ($n <= 0) {
+            throw new \RuntimeException('No se pudo generar el código de especialidad.');
+        }
+
+        return $this->formatCodigo($n);
+    }
+
+    public function peekNextCodigo(): string
+    {
+        $last = Especialidad::query()
+            ->select('codigo')
+            ->whereRaw("codigo ~ '^[0-9]+$'")
+            ->orderByRaw("codigo::int desc")
+            ->first();
+
+        $n = 0;
+        if ($last && is_string($last->codigo) && $last->codigo !== '') {
+            $n = (int)$last->codigo;
+        }
+
+        return $this->formatCodigo($n + 1);
+    }
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $perPage = (int)($filters['per_page'] ?? 50);
@@ -44,7 +83,7 @@ class EspecialidadService
     {
         return DB::transaction(function () use ($data) {
             $especialidad = Especialidad::create([
-                'codigo' => $data['codigo'],
+                'codigo' => $this->nextCodigo(),
                 'descripcion' => $data['descripcion'],
                 'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
             ]);
@@ -61,7 +100,7 @@ class EspecialidadService
                 ],
                 'success',
                 201
-            );            
+            );
 
             return $especialidad;
         });
@@ -73,7 +112,6 @@ class EspecialidadService
             $before = $especialidad->only(['codigo', 'descripcion', 'estado']);
 
             $especialidad->fill([
-                'codigo' => $data['codigo'],
                 'descripcion' => $data['descripcion'],
                 'estado' => $data['estado'],
             ]);
@@ -118,7 +156,7 @@ class EspecialidadService
                 ],
                 'success',
                 200
-            );            
+            );
 
             return $especialidad;
         });
