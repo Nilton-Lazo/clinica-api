@@ -14,6 +14,27 @@ class TurnoService
 {
     public function __construct(private AuditService $audit) {}
 
+    private function formatCodigo(int $n): string
+    {
+        $codigo = str_pad((string)$n, 3, '0', STR_PAD_LEFT);
+        if (strlen($codigo) !== 3) {
+            throw new \RuntimeException('No se pudo generar el código.');
+        }
+        return $codigo;
+    }
+
+    public function previewNextCodigo(): string
+    {
+        $last = Turno::query()->orderByDesc('codigo')->value('codigo');
+        $next = $last ? ((int)$last + 1) : 1;
+
+        if ($next > 999) {
+            return $this->formatCodigo(999);
+        }
+
+        return $this->formatCodigo($next);
+    }
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $perPage = (int)($filters['per_page'] ?? 50);
@@ -54,10 +75,13 @@ class TurnoService
                 throw ValidationException::withMessages(['codigo' => ['Se alcanzó el máximo de turnos (999).']]);
             }
 
-            $codigo = str_pad((string)$next, 3, '0', STR_PAD_LEFT);
+            $codigo = $this->formatCodigo($next);
 
             [$duracionMin, $hi, $hf] = $this->calcDurationMinutes($data['hora_inicio'], $data['hora_fin']);
-            $descripcion = $this->buildDescripcion($codigo, $hi, $hf);
+            $auto = $this->buildDescripcion($codigo, $hi, $hf);
+
+            $descIn = isset($data['descripcion']) ? trim((string)$data['descripcion']) : '';
+            $descripcion = $descIn !== '' ? $descIn : $auto;
 
             $turno = Turno::create([
                 'codigo' => $codigo,
@@ -107,18 +131,23 @@ class TurnoService
             ]);
 
             [$duracionMin, $hi, $hf] = $this->calcDurationMinutes($data['hora_inicio'], $data['hora_fin']);
-            $descripcion = $this->buildDescripcion($turno->codigo, $hi, $hf);
+            $auto = $this->buildDescripcion($turno->codigo, $hi, $hf);
 
-            $turno->fill([
+            $attrs = [
                 'hora_inicio' => $hi,
                 'hora_fin' => $hf,
                 'duracion_minutos' => $duracionMin,
-                'descripcion' => $descripcion,
                 'tipo_turno' => $data['tipo_turno'],
                 'jornada' => $data['jornada'],
                 'estado' => $data['estado'],
-            ]);
+            ];
 
+            if (array_key_exists('descripcion', $data)) {
+                $descIn = $data['descripcion'] === null ? '' : trim((string)$data['descripcion']);
+                $attrs['descripcion'] = $descIn !== '' ? $descIn : $auto;
+            }
+
+            $turno->fill($attrs);
             $turno->save();
 
             $after = $turno->only([
@@ -193,6 +222,6 @@ class TurnoService
 
     private function buildDescripcion(string $codigo, string $horaInicio, string $horaFin): string
     {
-        return "Turno : {$codigo} - de {$horaInicio} a {$horaFin}";
+        return "Turno: {$codigo} - de {$horaInicio} a {$horaFin}";
     }
 }

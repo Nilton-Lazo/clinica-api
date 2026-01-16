@@ -28,6 +28,7 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::patch('medicos/{medico}/desactivar', [MedicoController::class, 'deactivate'])->middleware('throttle:sensitive-write');   
 
         Route::get('turnos', [TurnoController::class, 'index'])->middleware('throttle:api');
+        Route::get('turnos/next-codigo', [TurnoController::class, 'nextCodigo'])->middleware('throttle:api');
         Route::post('turnos', [TurnoController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::put('turnos/{turno}', [TurnoController::class, 'update'])->middleware('throttle:sensitive-write');
         Route::patch('turnos/{turno}/desactivar', [TurnoController::class, 'deactivate'])->middleware('throttle:sensitive-write');

@@ -18,11 +18,16 @@ class TurnoUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'codigo' => ['prohibited'],
+            'duracion_minutos' => ['prohibited'],
+
             'hora_inicio' => ['required', 'date_format:H:i'],
             'hora_fin' => ['required', 'date_format:H:i'],
             'tipo_turno' => ['required', 'string', Rule::in(TipoTurno::values())],
             'jornada' => ['required', 'string', Rule::in(JornadaTurno::values())],
             'estado' => ['required', 'string', Rule::in(RecordStatus::values())],
+
+            'descripcion' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }
 
@@ -36,6 +41,11 @@ class TurnoUpdateRequest extends FormRequest
             $j = strtoupper(trim((string)$this->input('jornada')));
             $j = str_replace('MAÑANA', 'MANANA', $j);
             $this->merge(['jornada' => $j]);
+        }
+
+        if ($this->has('descripcion')) {
+            $d = trim((string)$this->input('descripcion'));
+            $this->merge(['descripcion' => $d !== '' ? $d : null]);
         }
     }
 }

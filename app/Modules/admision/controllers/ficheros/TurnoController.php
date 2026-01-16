@@ -30,6 +30,17 @@ class TurnoController extends Controller
         ]);
     }
 
+    public function nextCodigo()
+    {
+        $this->authorize('create', Turno::class);
+
+        $codigo = $this->service->previewNextCodigo();
+
+        return response()->json([
+            'data' => ['codigo' => $codigo],
+        ]);
+    }
+
     public function store(TurnoStoreRequest $request)
     {
         $this->authorize('create', Turno::class);
