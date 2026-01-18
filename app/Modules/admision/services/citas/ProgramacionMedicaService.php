@@ -10,6 +10,7 @@ use App\Modules\admision\models\ProgramacionMedica;
 use App\Modules\admision\models\Turno;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +27,8 @@ class ProgramacionMedicaService
         $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
         $from = isset($filters['from']) ? trim((string)$filters['from']) : null;
         $to = isset($filters['to']) ? trim((string)$filters['to']) : null;
+
+        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
 
         $query = ProgramacionMedica::query()->with([
             'especialidad:id,codigo,descripcion',
@@ -46,8 +49,12 @@ class ProgramacionMedicaService
             $query->whereDate('fecha', '<=', $to);
         }
 
+        if ($q !== null && $q !== '') {
+            $this->applySearch($query, $q);
+        }
+
         return $query
-            ->orderBy('fecha', 'desc')
+            ->orderBy('fecha', 'asc')
             ->orderBy('turno_id')
             ->paginate($perPage)
             ->appends([
@@ -55,6 +62,7 @@ class ProgramacionMedicaService
                 'status' => $status,
                 'from' => $from,
                 'to' => $to,
+                'q' => $q,
             ]);
     }
 
@@ -317,5 +325,68 @@ class ProgramacionMedicaService
         }
 
         throw ValidationException::withMessages(['modalidad_fechas' => ['Modalidad inválida.']]);
+    }
+
+    private function applySearch(Builder $query, string $q): void
+    {
+        $q = trim($q);
+        if ($q === '') return;
+
+        $qLike = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $q) . '%';
+
+        $qInt = null;
+        if (preg_match('/^\s*0*\d+\s*$/', $q)) {
+            $qInt = (int)$q;
+        }
+
+        $qDate = $this->tryParseDateToYmd($q);
+
+        $query->where(function (Builder $w) use ($qLike, $qInt, $qDate) {
+
+            if ($qInt !== null && $qInt > 0) {
+                $w->orWhere('id', $qInt);
+                $w->orWhere('cupos', $qInt);
+            }
+
+            if ($qDate !== null) {
+                $w->orWhereDate('fecha', $qDate);
+            }
+
+            $w->orWhereHas('medico', function (Builder $m) use ($qLike) {
+                $m->where('nombres', 'ilike', $qLike)
+                    ->orWhere('apellido_paterno', 'ilike', $qLike)
+                    ->orWhere('apellido_materno', 'ilike', $qLike);
+            });
+
+            $w->orWhereHas('especialidad', function (Builder $e) use ($qLike) {
+                $e->where('codigo', 'ilike', $qLike)
+                    ->orWhere('descripcion', 'ilike', $qLike);
+            });
+
+            $w->orWhereHas('consultorio', function (Builder $c) use ($qLike) {
+                $c->where('abreviatura', 'ilike', $qLike)
+                    ->orWhere('descripcion', 'ilike', $qLike);
+            });
+
+            $w->orWhereHas('turno', function (Builder $t) use ($qLike) {
+                $t->where('codigo', 'ilike', $qLike)
+                    ->orWhere('descripcion', 'ilike', $qLike);
+            });
+        });
+    }
+
+    private function tryParseDateToYmd(string $q): ?string
+    {
+        $q = trim($q);
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $q)) {
+            return $q;
+        }
+
+        if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $q, $m)) {
+            return $m[3] . '-' . $m[2] . '-' . $m[1];
+        }
+
+        return null;
     }
 }

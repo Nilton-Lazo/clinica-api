@@ -11,13 +11,15 @@ use Illuminate\Http\Request;
 
 class ProgramacionMedicaController extends Controller
 {
-    public function __construct(private ProgramacionMedicaService $service) {}
+    public function __construct(private ProgramacionMedicaService $service)
+    {
+    }
 
     public function index(Request $request)
     {
         $this->authorize('viewAny', ProgramacionMedica::class);
 
-        $p = $this->service->paginate($request->only(['from', 'to', 'status', 'per_page', 'page']));
+        $p = $this->service->paginate($request->only(['from', 'to', 'status', 'q', 'per_page', 'page']));
 
         return response()->json([
             'data' => $p->items(),
@@ -26,6 +28,25 @@ class ProgramacionMedicaController extends Controller
                 'per_page' => $p->perPage(),
                 'total' => $p->total(),
                 'last_page' => $p->lastPage(),
+            ],
+        ]);
+    }
+
+    public function nextCodigo(Request $request)
+    {
+        $this->authorize('viewAny', ProgramacionMedica::class);
+
+        $count = (int) $request->query('count', 1);
+        if ($count < 1) $count = 1;
+        if ($count > 370) $count = 370;
+
+        $maxId = (int) (ProgramacionMedica::query()->max('id') ?? 0);
+
+        return response()->json([
+            'data' => [
+                'next_id' => $maxId + 1,
+                'last_id' => $maxId + $count,
+                'count' => $count,
             ],
         ]);
     }
@@ -64,8 +85,8 @@ class ProgramacionMedicaController extends Controller
     {
         $this->authorize('viewAny', ProgramacionMedica::class);
 
-        $medicoId = (int)$request->query('medico_id');
-        $turnoId = (int)$request->query('turno_id');
+        $medicoId = (int) $request->query('medico_id');
+        $turnoId = (int) $request->query('turno_id');
 
         if ($medicoId <= 0 || $turnoId <= 0) {
             return response()->json([
