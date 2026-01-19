@@ -35,6 +35,18 @@ use App\Modules\admision\policies\ficheros\TarifaPolicy;
 use App\Modules\admision\models\TipoCliente;
 use App\Modules\admision\policies\ficheros\TipoClientePolicy;
 
+use App\Modules\admision\models\TarifaCategoria;
+use App\Modules\admision\policies\ficheros\TarifaCategoriaPolicy;
+
+use App\Modules\admision\models\TarifaSubcategoria;
+use App\Modules\admision\policies\ficheros\TarifaSubcategoriaPolicy;
+
+use App\Modules\admision\models\TarifaServicio;
+use App\Modules\admision\policies\ficheros\TarifaServicioPolicy;
+
+use App\Modules\admision\models\Paciente;
+use App\Modules\admision\policies\pacientes\PacientePolicy;
+
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
@@ -51,6 +63,10 @@ class AuthServiceProvider extends ServiceProvider
         Contratante::class => ContratantePolicy::class,
         Tarifa::class => TarifaPolicy::class,
         TipoCliente::class => TipoClientePolicy::class,
+        Paciente::class => PacientePolicy::class,
+        TarifaCategoria::class => TarifaCategoriaPolicy::class,
+        TarifaSubcategoria::class => TarifaSubcategoriaPolicy::class,
+        TarifaServicio::class => TarifaServicioPolicy::class,
     ];
 
     public function boot(): void

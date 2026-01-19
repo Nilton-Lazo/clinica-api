@@ -10,6 +10,13 @@ use App\Modules\admision\controllers\ficheros\IafaController;
 use App\Modules\admision\controllers\ficheros\ContratanteController;
 use App\Modules\admision\controllers\ficheros\TarifaController;
 use App\Modules\admision\controllers\ficheros\TipoClienteController;
+use App\Modules\admision\controllers\catalogos\CatalogoPacienteController;
+use App\Modules\admision\controllers\pacientes\PacienteController;
+use App\Modules\admision\controllers\ficheros\TarifarioCatalogoController;
+use App\Modules\admision\controllers\ficheros\TarifaClonacionController;
+use App\Modules\admision\controllers\ficheros\TarifaCategoriaController;
+use App\Modules\admision\controllers\ficheros\TarifaSubcategoriaController;
+use App\Modules\admision\controllers\ficheros\TarifaServicioController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -68,6 +75,33 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::post('tipos-clientes', [TipoClienteController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::put('tipos-clientes/{tipoCliente}', [TipoClienteController::class, 'update'])->middleware('throttle:sensitive-write');
         Route::patch('tipos-clientes/{tipoCliente}/desactivar', [TipoClienteController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+        Route::get('tarifas/operativas', [TarifarioCatalogoController::class, 'tarifasOperativas'])->middleware('throttle:api');
+        Route::get('tarifas/base', [TarifarioCatalogoController::class, 'tarifaBase'])->middleware('throttle:api');
+        Route::get('tarifas/base/arbol', [TarifarioCatalogoController::class, 'arbolBase'])->middleware('throttle:api');
+        Route::get('tarifas/{tarifa}/servicios', [TarifarioCatalogoController::class, 'servicios'])->middleware('throttle:api');
+
+        Route::post('tarifas/{tarifa}/clonar-desde-base', [TarifaClonacionController::class, 'cloneFromBase'])->middleware('throttle:sensitive-write');
+
+        Route::get('tarifas/{tarifa}/categorias', [TarifaCategoriaController::class, 'index'])->middleware('throttle:api');
+        Route::get('tarifas/{tarifa}/categorias/lookup', [TarifaCategoriaController::class, 'lookup'])->middleware('throttle:api');
+        Route::get('tarifas/{tarifa}/categorias/next-codigo', [TarifaCategoriaController::class, 'nextCodigo'])->middleware('throttle:api');
+        Route::post('tarifas/{tarifa}/categorias', [TarifaCategoriaController::class, 'store'])->middleware('throttle:sensitive-write');
+        Route::put('tarifas/{tarifa}/categorias/{categoria}', [TarifaCategoriaController::class, 'update'])->middleware('throttle:sensitive-write');
+        Route::patch('tarifas/{tarifa}/categorias/{categoria}/desactivar', [TarifaCategoriaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+        Route::get('tarifas/{tarifa}/subcategorias', [TarifaSubcategoriaController::class, 'index'])->middleware('throttle:api');
+        Route::get('tarifas/{tarifa}/subcategorias/lookup', [TarifaSubcategoriaController::class, 'lookup'])->middleware('throttle:api');
+        Route::get('tarifas/{tarifa}/subcategorias/next-codigo', [TarifaSubcategoriaController::class, 'nextCodigo'])->middleware('throttle:api');
+        Route::post('tarifas/{tarifa}/subcategorias', [TarifaSubcategoriaController::class, 'store'])->middleware('throttle:sensitive-write');
+        Route::put('tarifas/{tarifa}/subcategorias/{subcategoria}', [TarifaSubcategoriaController::class, 'update'])->middleware('throttle:sensitive-write');
+        Route::patch('tarifas/{tarifa}/subcategorias/{subcategoria}/desactivar', [TarifaSubcategoriaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+        Route::get('tarifas/{tarifa}/servicios-crud', [TarifaServicioController::class, 'index'])->middleware('throttle:api');
+        Route::get('tarifas/{tarifa}/servicios-crud/next-codigo', [TarifaServicioController::class, 'nextCodigo'])->middleware('throttle:api');
+        Route::post('tarifas/{tarifa}/servicios-crud', [TarifaServicioController::class, 'store'])->middleware('throttle:sensitive-write');
+        Route::put('tarifas/{tarifa}/servicios-crud/{servicio}', [TarifaServicioController::class, 'update'])->middleware('throttle:sensitive-write');
+        Route::patch('tarifas/{tarifa}/servicios-crud/{servicio}/desactivar', [TarifaServicioController::class, 'deactivate'])->middleware('throttle:sensitive-write');
     });
 
     Route::prefix('citas')->group(function () {
@@ -77,5 +111,24 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::post('programacion-medica', [ProgramacionMedicaController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::put('programacion-medica/{programacionMedica}', [ProgramacionMedicaController::class, 'update'])->middleware('throttle:sensitive-write');
         Route::patch('programacion-medica/{programacionMedica}/desactivar', [ProgramacionMedicaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+    });
+
+    Route::prefix('catalogos')->group(function () {
+        Route::get('paciente-form', [CatalogoPacienteController::class, 'pacienteForm'])->middleware('throttle:api');
+        Route::get('paises', [CatalogoPacienteController::class, 'paises'])->middleware('throttle:api');
+        Route::get('ubigeos', [CatalogoPacienteController::class, 'ubigeos'])->middleware('throttle:api');
+    });
+
+    Route::prefix('pacientes')->group(function () {
+        Route::get('', [PacienteController::class, 'index'])->middleware('throttle:api');
+        Route::get('{paciente}', [PacienteController::class, 'show'])->middleware('throttle:api');
+    
+        Route::post('', [PacienteController::class, 'store'])->middleware('throttle:sensitive-write');
+        Route::put('{paciente}', [PacienteController::class, 'update'])->middleware('throttle:sensitive-write');
+
+        Route::patch('{paciente}/desactivar', [PacienteController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+        Route::post('{paciente}/planes', [PacienteController::class, 'addPlan'])->middleware('throttle:sensitive-write');
+        Route::patch('planes/{plan}/desactivar', [PacienteController::class, 'deactivatePlan'])->middleware('throttle:sensitive-write');
     });
 });

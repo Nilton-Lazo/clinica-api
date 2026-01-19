@@ -71,6 +71,21 @@ class Tarifa extends Model
         return $this->belongsTo(Iafa::class, 'iafa_id');
     }
 
+    public function categorias()
+    {
+        return $this->hasMany(TarifaCategoria::class, 'tarifa_id');
+    }
+
+    public function subcategorias()
+    {
+        return $this->hasMany(TarifaSubcategoria::class, 'tarifa_id');
+    }
+
+    public function servicios()
+    {
+        return $this->hasMany(TarifaServicio::class, 'tarifa_id');
+    }
+
     public function scopeActivos(Builder $query): Builder
     {
         return $query->where('estado', RecordStatus::ACTIVO->value);

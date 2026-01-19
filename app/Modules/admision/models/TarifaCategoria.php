@@ -6,17 +6,14 @@ use App\Core\support\RecordStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-class TipoCliente extends Model
+class TarifaCategoria extends Model
 {
-    protected $table = 'tipos_clientes';
+    protected $table = 'tarifa_categorias';
 
     protected $fillable = [
-        'codigo',
-        'system_key',
         'tarifa_id',
-        'iafa_id',
-        'contratante_id',
-        'descripcion_tipo_cliente',
+        'codigo',
+        'nombre',
         'estado',
     ];
 
@@ -25,14 +22,14 @@ class TipoCliente extends Model
         return $this->belongsTo(Tarifa::class, 'tarifa_id');
     }
 
-    public function iafa()
+    public function subcategorias()
     {
-        return $this->belongsTo(Iafa::class, 'iafa_id');
+        return $this->hasMany(TarifaSubcategoria::class, 'categoria_id');
     }
 
-    public function contratante()
+    public function servicios()
     {
-        return $this->belongsTo(Contratante::class, 'contratante_id');
+        return $this->hasMany(TarifaServicio::class, 'categoria_id');
     }
 
     public function scopeActivos(Builder $query): Builder
