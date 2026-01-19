@@ -89,7 +89,9 @@ class TarifaService
     private function switchBaseTo(Tarifa $target): array
     {
         if ($target->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['tarifa_base' => ['Solo una tarifa ACTIVA puede ser tarifario base.']]);
+            throw ValidationException::withMessages([
+                'estado' => ['Para cambiar a tarifario base, el tarifario seleccionado debe estar ACTIVO.'],
+            ]);
         }
 
         $previous = Tarifa::query()->where('tarifa_base', true)->first();
@@ -123,6 +125,10 @@ class TarifaService
                 Tarifa::query()->where('tarifa_base', true)->update(['tarifa_base' => false, 'updated_at' => now()]);
             }
 
+            $estado = $makeBase
+                ? RecordStatus::ACTIVO->value
+                : strtoupper(trim((string)($data['estado'] ?? RecordStatus::ACTIVO->value)));
+
             $tarifa = Tarifa::create([
                 'codigo' => $codigo,
                 'requiere_acreditacion' => $requiereAcreditacion,
@@ -151,7 +157,7 @@ class TarifaService
                 'factor_medicamentos_genericos' => $data['factor_medicamentos_genericos'] ?? 1.00,
                 'factor_material_medico' => $data['factor_material_medico'] ?? 1.00,
 
-                'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
+                'estado' => $estado,
             ]);
 
             $this->audit->log(
@@ -239,10 +245,20 @@ class TarifaService
 
             if (!$tarifa->tarifa_base && $requestedBase) {
                 $this->switchBaseTo($tarifa);
-            } else {
-                if ($tarifa->estado !== (string)$data['estado'] && $tarifa->tarifa_base && strtoupper(trim((string)$data['estado'])) !== RecordStatus::ACTIVO->value) {
-                    throw ValidationException::withMessages(['estado' => ['No se puede inactivar/suspender el tarifario base. Primero marca otra tarifa como base.']]);
+            }
+
+            $estadoRequested = strtoupper(trim((string)$data['estado']));
+
+            if ($tarifa->tarifa_base) {
+                if ($estadoRequested !== RecordStatus::ACTIVO->value) {
+                    throw ValidationException::withMessages([
+                        'estado' => ['No se puede inactivar/suspender el tarifario base. Primero marca otra tarifa como base.'],
+                    ]);
                 }
+
+                $estadoFinal = RecordStatus::ACTIVO->value;
+            } else {
+                $estadoFinal = $estadoRequested;
             }
 
             $iafaId = $data['iafa_id'] ?? null;
@@ -275,7 +291,7 @@ class TarifaService
                 'factor_medicamentos_genericos' => $data['factor_medicamentos_genericos'] ?? $tarifa->factor_medicamentos_genericos,
                 'factor_material_medico' => $data['factor_material_medico'] ?? $tarifa->factor_material_medico,
 
-                'estado' => strtoupper(trim((string)$data['estado'])),
+                'estado' => $estadoFinal,
             ]);
 
             $tarifa->save();
@@ -330,6 +346,11 @@ class TarifaService
             $before = $tarifa->only(['tarifa_base', 'estado']);
 
             $meta = $this->switchBaseTo($tarifa);
+
+            if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
+                $tarifa->estado = RecordStatus::ACTIVO->value;
+                $tarifa->save();
+            }
 
             if ($tarifa->iafa_id !== null) {
                 $tarifa->requiere_acreditacion = $this->enforceParticularRule($tarifa->iafa_id, (bool)$tarifa->requiere_acreditacion);
