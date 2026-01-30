@@ -46,10 +46,18 @@ class CatalogosPacienteSeeder extends Seeder
 
         DB::table('tipos_clientes')
             ->whereRaw('UPPER(TRIM(descripcion_tipo_cliente)) = ?', ['PARTICULAR/PARTICULAR'])
-            ->update(['system_key' => 'DEFAULT_PARTICULAR', 'updated_at' => now()]);
+            ->update([
+                'system_key' => 'DEFAULT_PARTICULAR',
+                'estado' => 'ACTIVO',
+                'updated_at' => now(),
+            ]);
 
         DB::table('tipos_clientes')
             ->whereIn(DB::raw('UPPER(TRIM(descripcion_tipo_cliente))'), ['PRIVADA/PRIVADO', 'PRIVADO/PRIVADO'])
-            ->update(['system_key' => 'DEFAULT_PRIVADO', 'updated_at' => now()]);
+            ->update([
+                'system_key' => 'DEFAULT_PRIVADO',
+                'estado' => 'ACTIVO',
+                'updated_at' => now(),
+            ]);
     }
 }

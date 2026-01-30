@@ -81,9 +81,10 @@ class PacienteService
         }
 
         return $query
-            ->orderBy('id', 'desc')
-            ->paginate($perPage)
-            ->appends(['per_page' => $perPage, 'q' => $q, 'status' => $status]);
+        ->orderBy('created_at', 'desc')
+        ->orderBy('id', 'desc')
+        ->paginate($perPage)
+        ->appends(['per_page' => $perPage, 'q' => $q, 'status' => $status]);
     }
 
     private function fullName(Paciente $p): string

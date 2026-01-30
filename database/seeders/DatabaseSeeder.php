@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             InitialAdminSeeder::class,
             CatalogosPacienteSeeder::class,
+            SystemKeySeeder::class,
         ]);
     }
 }
