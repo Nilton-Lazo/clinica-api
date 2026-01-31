@@ -214,6 +214,55 @@ class TarifaClonacionService
                 ['categoria_id', 'subcategoria_id', 'servicio_codigo', 'nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'estado', 'updated_at']
             );
 
+            if ($cloneAll) {
+                $baseCatCodes = $baseCats->pluck('codigo')->map(fn ($v) => (string)$v)->all();
+                $baseSubKeys = $baseSubs
+                    ->map(fn ($s) => ((string)$s->cat_codigo) . '|' . ((string)$s->sub_codigo))
+                    ->values()
+                    ->all();
+                $baseSrvCodes = $baseServs->pluck('codigo')->map(fn ($v) => (string)$v)->all();
+
+                if (count($baseSrvCodes) > 0) {
+                    DB::table('tarifa_servicios')
+                        ->where('tarifa_id', $targetId)
+                        ->whereNotIn('codigo', $baseSrvCodes)
+                        ->delete();
+                } else {
+                    DB::table('tarifa_servicios')->where('tarifa_id', $targetId)->delete();
+                }
+
+                if (count($baseSubKeys) > 0) {
+                    $allowedSubIds = DB::table('tarifa_subcategorias AS s')
+                        ->join('tarifa_categorias AS c', 'c.id', '=', 's.categoria_id')
+                        ->where('s.tarifa_id', $targetId)
+                        ->whereIn('c.codigo', $baseCatCodes)
+                        ->whereIn(DB::raw("c.codigo || '|' || s.codigo"), $baseSubKeys)
+                        ->pluck('s.id')
+                        ->map(fn ($v) => (int)$v)
+                        ->all();
+
+                    if (count($allowedSubIds) > 0) {
+                        DB::table('tarifa_subcategorias')
+                            ->where('tarifa_id', $targetId)
+                            ->whereNotIn('id', $allowedSubIds)
+                            ->delete();
+                    } else {
+                        DB::table('tarifa_subcategorias')->where('tarifa_id', $targetId)->delete();
+                    }
+                } else {
+                    DB::table('tarifa_subcategorias')->where('tarifa_id', $targetId)->delete();
+                }
+
+                if (count($baseCatCodes) > 0) {
+                    DB::table('tarifa_categorias')
+                        ->where('tarifa_id', $targetId)
+                        ->whereNotIn('codigo', $baseCatCodes)
+                        ->delete();
+                } else {
+                    DB::table('tarifa_categorias')->where('tarifa_id', $targetId)->delete();
+                }
+            }
+
             $result = [
                 'base' => ['id' => $baseId, 'codigo' => (string)$base->codigo],
                 'target' => ['id' => $targetId, 'codigo' => (string)$target->codigo],

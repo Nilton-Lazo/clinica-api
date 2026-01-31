@@ -184,12 +184,18 @@ class TarifaSubcategoriaService
                 'estado' => $data['estado'],
             ]);
             $sub->save();
+            $sub->refresh();
 
             if ($sub->estado !== RecordStatus::ACTIVO->value) {
                 DB::table('tarifa_servicios')
                     ->where('tarifa_id', $tarifa->id)
                     ->where('subcategoria_id', $sub->id)
                     ->update(['estado' => $sub->estado, 'updated_at' => now()]);
+            } else {
+                DB::table('tarifa_servicios')
+                    ->where('tarifa_id', $tarifa->id)
+                    ->where('subcategoria_id', $sub->id)
+                    ->update(['estado' => RecordStatus::ACTIVO->value, 'updated_at' => now()]);
             }
 
             $after = $sub->only(['categoria_id', 'codigo', 'nombre', 'estado']);
@@ -222,6 +228,7 @@ class TarifaSubcategoriaService
 
             $sub->estado = RecordStatus::INACTIVO->value;
             $sub->save();
+            $sub->refresh();
 
             DB::table('tarifa_servicios')
                 ->where('tarifa_id', $tarifa->id)

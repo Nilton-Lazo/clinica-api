@@ -245,6 +245,7 @@ class TarifaServicioService
                 'estado' => $data['estado'],
             ]);
             $srv->save();
+            $srv->refresh();
 
             $after = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'estado']);
 
@@ -277,6 +278,7 @@ class TarifaServicioService
 
             $srv->estado = RecordStatus::INACTIVO->value;
             $srv->save();
+            $srv->refresh();
 
             $this->audit->log(
                 'masterdata.admision.tarifario.servicios.deactivate',
