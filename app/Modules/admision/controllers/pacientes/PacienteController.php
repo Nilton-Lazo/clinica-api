@@ -93,7 +93,12 @@ class PacienteController extends Controller
 
     public function deactivatePlan(PacientePlan $plan)
     {
-        $this->authorize('update', Paciente::class);
+        $paciente = $plan->paciente;
+        if (!$paciente) {
+            abort(404);
+        }
+
+        $this->authorize('update', $paciente);
 
         $updated = $this->service->deactivatePlan($plan);
 
