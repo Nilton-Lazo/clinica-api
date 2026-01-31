@@ -129,6 +129,7 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::patch('{paciente}/desactivar', [PacienteController::class, 'deactivate'])->middleware('throttle:sensitive-write');
 
         Route::post('{paciente}/planes', [PacienteController::class, 'addPlan'])->middleware('throttle:sensitive-write');
+        Route::put('{paciente}/planes/{plan}', [PacienteController::class, 'updatePlan'])->middleware('throttle:sensitive-write');
         Route::patch('planes/{plan}/desactivar', [PacienteController::class, 'deactivatePlan'])->middleware('throttle:sensitive-write');
     });
 });

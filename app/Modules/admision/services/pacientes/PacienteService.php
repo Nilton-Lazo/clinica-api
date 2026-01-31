@@ -397,9 +397,11 @@ class PacienteService
         });
     }
 
-    public function addPlan(Paciente $paciente, int $tipoClienteId): PacientePlan
+    public function addPlan(Paciente $paciente, array $data): PacientePlan
     {
-        return DB::transaction(function () use ($paciente, $tipoClienteId) {
+        return DB::transaction(function () use ($paciente, $data) {
+            $tipoClienteId = (int)$data['tipo_cliente_id'];
+
             $tc = TipoCliente::query()
                 ->where('id', $tipoClienteId)
                 ->where('estado', RecordStatus::ACTIVO->value)
@@ -418,12 +420,16 @@ class PacienteService
                 throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene este plan registrado.']]);
             }
 
+            $fecha = $data['fecha_afiliacion'] ?? null;
+            $fecha = $fecha !== null && trim((string)$fecha) !== '' ? $fecha : now()->toDateString();
+            $estado = $data['estado'] ?? RecordStatus::ACTIVO->value;
+
             $plan = PacientePlan::create([
                 'paciente_id' => (int)$paciente->id,
                 'tipo_cliente_id' => $tipoClienteId,
                 'parentesco_seguro' => $paciente->parentesco_seguro ?? ParentescoSeguroPaciente::NO_DEFINIDO->value,
-                'fecha_afiliacion' => now()->toDateString(),
-                'estado' => RecordStatus::ACTIVO->value,
+                'fecha_afiliacion' => $fecha,
+                'estado' => $estado,
             ]);
 
             $this->audit->log(
@@ -438,6 +444,60 @@ class PacienteService
                 ],
                 'success',
                 201
+            );
+
+            return $plan->load(['tipoCliente']);
+        });
+    }
+
+    public function updatePlan(Paciente $paciente, PacientePlan $plan, array $data): PacientePlan
+    {
+        return DB::transaction(function () use ($paciente, $plan, $data) {
+            $tipoClienteId = (int)$data['tipo_cliente_id'];
+
+            $tc = TipoCliente::query()
+                ->where('id', $tipoClienteId)
+                ->where('estado', RecordStatus::ACTIVO->value)
+                ->first();
+
+            if (!$tc) {
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['Tipo de cliente no existe o no está ACTIVO.']]);
+            }
+
+            $exists = PacientePlan::query()
+                ->where('paciente_id', $paciente->id)
+                ->where('tipo_cliente_id', $tipoClienteId)
+                ->where('id', '<>', $plan->id)
+                ->exists();
+
+            if ($exists) {
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene este plan registrado.']]);
+            }
+
+            $fecha = $data['fecha_afiliacion'] ?? null;
+            if ($fecha !== null && trim((string)$fecha) === '') {
+                $fecha = null;
+            }
+
+            $before = $plan->only(['tipo_cliente_id', 'fecha_afiliacion', 'estado']);
+
+            $plan->fill([
+                'tipo_cliente_id' => $tipoClienteId,
+                'parentesco_seguro' => $paciente->parentesco_seguro ?? ParentescoSeguroPaciente::NO_DEFINIDO->value,
+                'fecha_afiliacion' => $fecha ?? $plan->fecha_afiliacion ?? now()->toDateString(),
+                'estado' => $data['estado'],
+            ]);
+
+            $plan->save();
+
+            $this->audit->log(
+                'admision.pacientes.planes.update',
+                'Actualizar plan del paciente',
+                'paciente_plan',
+                (string)$plan->id,
+                ['before' => $before, 'after' => $plan->only(['tipo_cliente_id', 'fecha_afiliacion', 'estado'])],
+                'success',
+                200
             );
 
             return $plan->load(['tipoCliente']);

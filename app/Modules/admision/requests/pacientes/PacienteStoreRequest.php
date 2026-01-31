@@ -69,8 +69,8 @@ class PacienteStoreRequest extends FormRequest
             'direccion' => ['nullable', 'string', 'max:255'],
             'ubigeo_domicilio' => ['nullable', 'string', 'size:6', Rule::exists('ubigeos', 'codigo')->where(fn($q) => $q->where('estado', RecordStatus::ACTIVO->value))],
 
-            'parentesco_seguro' => ['nullable', 'string', Rule::in(ParentescoSeguroPaciente::values())],
-            'titular_nombre' => ['nullable', 'string', 'max:200'],
+            'parentesco_seguro' => ['required', 'string', Rule::in(ParentescoSeguroPaciente::values())],
+            'titular_nombre' => ['required', 'string', 'max:200'],
 
             'celular' => ['nullable', 'string', 'max:30'],
             'telefono' => ['nullable', 'string', 'max:30'],

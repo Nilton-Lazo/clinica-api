@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\models\PacientePlan;
 use App\Modules\admision\requests\pacientes\PacientePlanStoreRequest;
+use App\Modules\admision\requests\pacientes\PacientePlanUpdateRequest;
 use App\Modules\admision\requests\pacientes\PacienteStoreRequest;
 use App\Modules\admision\requests\pacientes\PacienteUpdateRequest;
 use App\Modules\admision\services\pacientes\PacienteService;
@@ -72,9 +73,22 @@ class PacienteController extends Controller
     {
         $this->authorize('update', $paciente);
 
-        $plan = $this->service->addPlan($paciente, (int)$request->validated()['tipo_cliente_id']);
+        $plan = $this->service->addPlan($paciente, $request->validated());
 
         return response()->json(['data' => $plan], 201);
+    }
+
+    public function updatePlan(PacientePlanUpdateRequest $request, Paciente $paciente, PacientePlan $plan)
+    {
+        $this->authorize('update', $paciente);
+
+        if ((int)$plan->paciente_id !== (int)$paciente->id) {
+            abort(404);
+        }
+
+        $updated = $this->service->updatePlan($paciente, $plan, $request->validated());
+
+        return response()->json(['data' => $updated]);
     }
 
     public function deactivatePlan(PacientePlan $plan)

@@ -6,7 +6,7 @@ use App\Core\support\RecordStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class PacientePlanStoreRequest extends FormRequest
+class PacientePlanUpdateRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -22,7 +22,7 @@ class PacientePlanStoreRequest extends FormRequest
                 Rule::exists('tipos_clientes', 'id')->where(fn($q) => $q->where('estado', RecordStatus::ACTIVO->value)),
             ],
             'fecha_afiliacion' => ['nullable', 'date'],
-            'estado' => ['nullable', 'string', Rule::in(RecordStatus::values())],
+            'estado' => ['required', 'string', Rule::in(RecordStatus::values())],
         ];
     }
 
