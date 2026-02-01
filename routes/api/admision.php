@@ -5,6 +5,7 @@ use App\Modules\admision\controllers\ficheros\ConsultorioController;
 use App\Modules\admision\controllers\ficheros\MedicoController;
 use App\Modules\admision\controllers\ficheros\TurnoController;
 use App\Modules\admision\controllers\citas\ProgramacionMedicaController;
+use App\Modules\admision\controllers\citas\AgendaMedicaController;
 use App\Modules\admision\controllers\ficheros\TipoIafaController;
 use App\Modules\admision\controllers\ficheros\IafaController;
 use App\Modules\admision\controllers\ficheros\ContratanteController;
@@ -111,6 +112,11 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::post('programacion-medica', [ProgramacionMedicaController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::put('programacion-medica/{programacionMedica}', [ProgramacionMedicaController::class, 'update'])->middleware('throttle:sensitive-write');
         Route::patch('programacion-medica/{programacionMedica}/desactivar', [ProgramacionMedicaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+        Route::get('agenda-medica/opciones', [AgendaMedicaController::class, 'opciones'])->middleware('throttle:api');
+        Route::get('agenda-medica/slots', [AgendaMedicaController::class, 'slots'])->middleware('throttle:api');
+        Route::get('agenda-medica', [AgendaMedicaController::class, 'index'])->middleware('throttle:api');
+        Route::post('agenda-medica', [AgendaMedicaController::class, 'store'])->middleware('throttle:sensitive-write');
     });
 
     Route::prefix('catalogos')->group(function () {

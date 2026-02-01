@@ -19,6 +19,8 @@ use App\Modules\admision\policies\ficheros\TurnoPolicy;
 
 use App\Modules\admision\models\ProgramacionMedica;
 use App\Modules\admision\policies\citas\ProgramacionMedicaPolicy;
+use App\Modules\admision\models\AgendaCita;
+use App\Modules\admision\policies\citas\AgendaCitaPolicy;
 
 use App\Modules\admision\models\TipoIafa;
 use App\Modules\admision\policies\ficheros\TipoIafaPolicy;
@@ -58,6 +60,7 @@ class AuthServiceProvider extends ServiceProvider
         Medico::class => MedicoPolicy::class,
         Turno::class => TurnoPolicy::class,
         ProgramacionMedica::class => ProgramacionMedicaPolicy::class,
+        AgendaCita::class => AgendaCitaPolicy::class,
         TipoIafa::class => TipoIafaPolicy::class,
         Iafa::class => IafaPolicy::class,
         Contratante::class => ContratantePolicy::class,

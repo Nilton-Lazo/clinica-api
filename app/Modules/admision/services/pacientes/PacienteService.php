@@ -531,7 +531,7 @@ class PacienteService
         return $paciente->load([
             'paisNacionalidad',
             'contactoEmergencia',
-            'planes.tipoCliente',
+            'planes.tipoCliente.iafa',
         ]);
     }
 }
