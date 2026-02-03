@@ -59,9 +59,16 @@ class TarifaClonacionService
                 ? $this->allBaseIds($baseId)
                 : $this->expandSelectionToFullTree($baseId, $catIdsIn, $subIdsIn, $srvIdsIn);
 
+            $existingCatCodes = DB::table('tarifa_categorias')
+                ->where('tarifa_id', $targetId)
+                ->pluck('codigo')
+                ->map(fn ($v) => (string)$v)
+                ->all();
+
             $baseCats = DB::table('tarifa_categorias')
                 ->where('tarifa_id', $baseId)
                 ->whereIn('id', $baseCatIds)
+                ->whereNotIn('codigo', $existingCatCodes)
                 ->orderBy('codigo')
                 ->get(['codigo', 'nombre', 'estado']);
 
@@ -77,19 +84,33 @@ class TarifaClonacionService
                 ];
             }
 
-            $this->upsertChunked('tarifa_categorias', $catRows, ['tarifa_id', 'codigo'], ['nombre', 'estado', 'updated_at']);
+            if (!empty($catRows)) {
+                DB::table('tarifa_categorias')->insert($catRows);
+            }
 
             $targetCatMap = DB::table('tarifa_categorias')
                 ->where('tarifa_id', $targetId)
-                ->whereIn('codigo', $baseCats->pluck('codigo')->all())
+                ->whereIn('codigo', DB::table('tarifa_categorias')
+                    ->where('tarifa_id', $baseId)
+                    ->whereIn('id', $baseCatIds)
+                    ->pluck('codigo')
+                    ->all())
                 ->pluck('id', 'codigo')
                 ->map(fn ($v) => (int)$v)
+                ->all();
+
+            $existingSubKeys = DB::table('tarifa_subcategorias AS s')
+                ->join('tarifa_categorias AS c', 'c.id', '=', 's.categoria_id')
+                ->where('s.tarifa_id', $targetId)
+                ->get(['s.codigo AS sub_codigo', 'c.codigo AS cat_codigo'])
+                ->map(fn ($r) => ((string)$r->cat_codigo) . '|' . ((string)$r->sub_codigo))
                 ->all();
 
             $baseSubs = DB::table('tarifa_subcategorias AS s')
                 ->join('tarifa_categorias AS c', 'c.id', '=', 's.categoria_id')
                 ->where('s.tarifa_id', $baseId)
                 ->whereIn('s.id', $baseSubIds)
+                ->whereNotIn(DB::raw("c.codigo || '|' || s.codigo"), $existingSubKeys)
                 ->orderBy('c.codigo')
                 ->orderBy('s.codigo')
                 ->get([
@@ -118,12 +139,18 @@ class TarifaClonacionService
                 ];
             }
 
-            $this->upsertChunked('tarifa_subcategorias', $subRows, ['categoria_id', 'codigo'], ['nombre', 'estado', 'updated_at']);
+            if (!empty($subRows)) {
+                DB::table('tarifa_subcategorias')->insert($subRows);
+            }
 
             $targetSubRows = DB::table('tarifa_subcategorias AS s')
                 ->join('tarifa_categorias AS c', 'c.id', '=', 's.categoria_id')
                 ->where('s.tarifa_id', $targetId)
-                ->whereIn('c.codigo', $baseCats->pluck('codigo')->all())
+                ->whereIn('c.codigo', DB::table('tarifa_categorias')
+                    ->where('tarifa_id', $baseId)
+                    ->whereIn('id', $baseCatIds)
+                    ->pluck('codigo')
+                    ->all())
                 ->get(['s.id', 's.codigo AS sub_codigo', 'c.codigo AS cat_codigo', 's.categoria_id']);
 
             $targetSubMap = [];
@@ -138,11 +165,18 @@ class TarifaClonacionService
                 ->pluck('codigo', 'nomenclador')
                 ->all();
 
+            $existingSvcCodes = DB::table('tarifa_servicios')
+                ->where('tarifa_id', $targetId)
+                ->pluck('codigo')
+                ->map(fn ($v) => (string)$v)
+                ->all();
+
             $baseServs = DB::table('tarifa_servicios AS s')
                 ->join('tarifa_categorias AS c', 'c.id', '=', 's.categoria_id')
                 ->join('tarifa_subcategorias AS sc', 'sc.id', '=', 's.subcategoria_id')
                 ->where('s.tarifa_id', $baseId)
                 ->whereIn('s.id', $baseSrvIds)
+                ->whereNotIn('s.codigo', $existingSvcCodes)
                 ->orderBy('c.codigo')
                 ->orderBy('sc.codigo')
                 ->orderBy('s.servicio_codigo')
@@ -207,60 +241,8 @@ class TarifaClonacionService
                 ];
             }
 
-            $this->upsertChunked(
-                'tarifa_servicios',
-                $svcRows,
-                ['tarifa_id', 'codigo'],
-                ['categoria_id', 'subcategoria_id', 'servicio_codigo', 'nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'estado', 'updated_at']
-            );
-
-            if ($cloneAll) {
-                $baseCatCodes = $baseCats->pluck('codigo')->map(fn ($v) => (string)$v)->all();
-                $baseSubKeys = $baseSubs
-                    ->map(fn ($s) => ((string)$s->cat_codigo) . '|' . ((string)$s->sub_codigo))
-                    ->values()
-                    ->all();
-                $baseSrvCodes = $baseServs->pluck('codigo')->map(fn ($v) => (string)$v)->all();
-
-                if (count($baseSrvCodes) > 0) {
-                    DB::table('tarifa_servicios')
-                        ->where('tarifa_id', $targetId)
-                        ->whereNotIn('codigo', $baseSrvCodes)
-                        ->delete();
-                } else {
-                    DB::table('tarifa_servicios')->where('tarifa_id', $targetId)->delete();
-                }
-
-                if (count($baseSubKeys) > 0) {
-                    $allowedSubIds = DB::table('tarifa_subcategorias AS s')
-                        ->join('tarifa_categorias AS c', 'c.id', '=', 's.categoria_id')
-                        ->where('s.tarifa_id', $targetId)
-                        ->whereIn('c.codigo', $baseCatCodes)
-                        ->whereIn(DB::raw("c.codigo || '|' || s.codigo"), $baseSubKeys)
-                        ->pluck('s.id')
-                        ->map(fn ($v) => (int)$v)
-                        ->all();
-
-                    if (count($allowedSubIds) > 0) {
-                        DB::table('tarifa_subcategorias')
-                            ->where('tarifa_id', $targetId)
-                            ->whereNotIn('id', $allowedSubIds)
-                            ->delete();
-                    } else {
-                        DB::table('tarifa_subcategorias')->where('tarifa_id', $targetId)->delete();
-                    }
-                } else {
-                    DB::table('tarifa_subcategorias')->where('tarifa_id', $targetId)->delete();
-                }
-
-                if (count($baseCatCodes) > 0) {
-                    DB::table('tarifa_categorias')
-                        ->where('tarifa_id', $targetId)
-                        ->whereNotIn('codigo', $baseCatCodes)
-                        ->delete();
-                } else {
-                    DB::table('tarifa_categorias')->where('tarifa_id', $targetId)->delete();
-                }
+            if (!empty($svcRows)) {
+                DB::table('tarifa_servicios')->insert($svcRows);
             }
 
             $result = [
@@ -419,14 +401,4 @@ class TarifaClonacionService
         return [$finalCatIds, $finalSubIds, $finalSrvIds];
     }
 
-    private function upsertChunked(string $table, array $rows, array $uniqueBy, array $updateCols): void
-    {
-        if (count($rows) === 0) {
-            return;
-        }
-
-        foreach (array_chunk($rows, 500) as $chunk) {
-            DB::table($table)->upsert($chunk, $uniqueBy, $updateCols);
-        }
-    }
 }
