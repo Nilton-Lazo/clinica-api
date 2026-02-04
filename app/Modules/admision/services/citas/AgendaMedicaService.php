@@ -48,6 +48,7 @@ class AgendaMedicaService
         if (count($programacionIds) > 0 && Schema::hasTable('agenda_citas')) {
             $citasCount = AgendaCita::query()
                 ->whereIn('programacion_medica_id', $programacionIds)
+                ->where('estado', RecordStatus::ACTIVO->value)
                 ->selectRaw('programacion_medica_id, count(*) as cnt')
                 ->groupBy('programacion_medica_id')
                 ->pluck('cnt', 'programacion_medica_id')
@@ -121,6 +122,7 @@ class AgendaMedicaService
 
         $p = AgendaCita::query()
             ->where('programacion_medica_id', $programacion->id)
+            ->where('estado', RecordStatus::ACTIVO->value)
             ->with(['iafa:id,codigo,descripcion_corta,razon_social'])
             ->orderBy('hora', 'asc')
             ->paginate($perPage)
@@ -163,6 +165,7 @@ class AgendaMedicaService
         $slots = $this->buildSlots($programacion);
         $taken = AgendaCita::query()
             ->where('programacion_medica_id', $programacion->id)
+            ->where('estado', RecordStatus::ACTIVO->value)
             ->pluck('hora')
             ->map(fn ($v) => substr((string)$v, 0, 5))
             ->values()
@@ -207,6 +210,7 @@ class AgendaMedicaService
 
         $taken = AgendaCita::query()
             ->where('programacion_medica_id', $programacion->id)
+            ->where('estado', RecordStatus::ACTIVO->value)
             ->pluck('hora')
             ->map(fn ($v) => substr((string)$v, 0, 5))
             ->values()
@@ -380,6 +384,44 @@ class AgendaMedicaService
             'adicionales' => $adicionales,
             'extras' => $extras,
         ];
+    }
+
+    public function anularCita(int $id): AgendaCita
+    {
+        if (!Schema::hasTable('agenda_citas')) {
+            throw ValidationException::withMessages([
+                'agenda_citas' => ['Falta ejecutar las migraciones de agenda de citas.'],
+            ]);
+        }
+
+        $cita = AgendaCita::query()->findOrFail($id);
+
+        if ($cita->estado !== RecordStatus::ACTIVO->value) {
+            throw ValidationException::withMessages([
+                'cita' => ['La cita ya está anulada o no está activa.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($cita) {
+            $cita->estado = RecordStatus::INACTIVO->value;
+            $cita->save();
+
+            $this->audit->log(
+                'admision.citas.agenda_medica.anular',
+                'Anular cita (liberar hora)',
+                'agenda_citas',
+                (string)$cita->id,
+                [
+                    'programacion_medica_id' => (int)$cita->programacion_medica_id,
+                    'hora' => $cita->hora,
+                    'paciente_id' => (int)$cita->paciente_id,
+                ],
+                'success',
+                200
+            );
+
+            return $cita;
+        });
     }
 
     private function nextCodigo(int $programacionId): string

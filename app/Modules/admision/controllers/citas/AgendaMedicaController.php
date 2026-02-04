@@ -74,4 +74,14 @@ class AgendaMedicaController extends Controller
 
         return response()->json(['data' => $cita], 201);
     }
+
+    public function anular(int $id)
+    {
+        $cita = AgendaCita::query()->findOrFail($id);
+        $this->authorize('update', $cita);
+
+        $cita = $this->service->anularCita((int)$id);
+
+        return response()->json(['data' => $cita]);
+    }
 }

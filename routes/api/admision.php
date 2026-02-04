@@ -117,6 +117,7 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::get('agenda-medica/slots', [AgendaMedicaController::class, 'slots'])->middleware('throttle:api');
         Route::get('agenda-medica', [AgendaMedicaController::class, 'index'])->middleware('throttle:api');
         Route::post('agenda-medica', [AgendaMedicaController::class, 'store'])->middleware('throttle:sensitive-write');
+        Route::patch('agenda-medica/{id}/anular', [AgendaMedicaController::class, 'anular'])->middleware('throttle:sensitive-write');
     });
 
     Route::prefix('catalogos')->group(function () {
