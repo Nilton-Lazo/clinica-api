@@ -28,7 +28,7 @@ class AgendaMedicaService
         $query = ProgramacionMedica::query()
             ->with([
                 'especialidad:id,codigo,descripcion',
-                'medico:id,nombres,apellido_paterno,apellido_materno',
+                'medico:id,codigo,nombres,apellido_paterno,apellido_materno,cmp',
             ])
             ->whereDate('fecha', $fecha)
             ->where('estado', RecordStatus::ACTIVO->value);
@@ -43,23 +43,48 @@ class AgendaMedicaService
 
         $items = $query->get();
 
+        $programacionIds = $items->pluck('id')->all();
+        $citasCount = [];
+        if (count($programacionIds) > 0 && Schema::hasTable('agenda_citas')) {
+            $citasCount = AgendaCita::query()
+                ->whereIn('programacion_medica_id', $programacionIds)
+                ->selectRaw('programacion_medica_id, count(*) as cnt')
+                ->groupBy('programacion_medica_id')
+                ->pluck('cnt', 'programacion_medica_id')
+                ->all();
+        }
+
+        $cuposDisponiblesPorEspecialidad = [];
+        foreach ($items as $pm) {
+            $tomados = (int)($citasCount[$pm->id] ?? 0);
+            $disponibles = max(0, (int)$pm->cupos - $tomados);
+            $eid = $pm->especialidad_id;
+            $cuposDisponiblesPorEspecialidad[$eid] = ($cuposDisponiblesPorEspecialidad[$eid] ?? 0) + $disponibles;
+        }
+
         $especialidades = [];
         $medicos = [];
 
         foreach ($items as $pm) {
             if ($pm->especialidad) {
-                $especialidades[$pm->especialidad->id] = [
-                    'id' => (int)$pm->especialidad->id,
+                $eid = (int)$pm->especialidad->id;
+                $especialidades[$eid] = [
+                    'id' => $eid,
                     'codigo' => (string)$pm->especialidad->codigo,
                     'descripcion' => (string)$pm->especialidad->descripcion,
+                    'cupos_disponibles' => (int)($cuposDisponiblesPorEspecialidad[$eid] ?? 0),
                 ];
             }
             if ($pm->medico) {
+                $codigo = $pm->medico->getAttribute('codigo');
+                $codigoStr = $codigo !== null ? trim((string)$codigo) : '';
                 $medicos[$pm->medico->id] = [
                     'id' => (int)$pm->medico->id,
+                    'codigo' => $codigoStr !== '' ? $codigoStr : null,
                     'nombres' => (string)$pm->medico->nombres,
                     'apellido_paterno' => (string)$pm->medico->apellido_paterno,
                     'apellido_materno' => (string)$pm->medico->apellido_materno,
+                    'cmp' => $pm->medico->cmp !== null && trim((string)$pm->medico->cmp) !== '' ? (string)$pm->medico->cmp : null,
                 ];
             }
         }
