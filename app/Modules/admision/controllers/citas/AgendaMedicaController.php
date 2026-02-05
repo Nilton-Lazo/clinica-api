@@ -36,7 +36,7 @@ class AgendaMedicaController extends Controller
     {
         $this->authorize('viewAny', AgendaCita::class);
 
-        $filters = $request->only(['fecha', 'especialidad_id', 'medico_id', 'per_page', 'page']);
+        $filters = $request->only(['fecha', 'especialidad_id', 'medico_id', 'estado_atencion', 'per_page', 'page']);
         $res = $this->service->listarCitas($filters);
 
         if (!$res['paginator']) {

@@ -3,6 +3,7 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\support\CitaAtencionEstado;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\AgendaCita;
 use App\Modules\admision\models\Medico;
@@ -120,18 +121,29 @@ class AgendaMedicaService
         $perPage = (int)($filters['per_page'] ?? 50);
         $perPage = max(1, min(100, $perPage));
 
-        $p = AgendaCita::query()
+        $estadoAtencion = isset($filters['estado_atencion']) ? trim((string)$filters['estado_atencion']) : null;
+        $validEstadoAtencion = $estadoAtencion !== '' && in_array($estadoAtencion, CitaAtencionEstado::values(), true);
+
+        $query = AgendaCita::query()
             ->where('programacion_medica_id', $programacion->id)
             ->where('estado', RecordStatus::ACTIVO->value)
-            ->with(['iafa:id,codigo,descripcion_corta,razon_social'])
-            ->orderBy('hora', 'asc')
-            ->paginate($perPage)
-            ->appends([
-                'fecha' => $fecha,
-                'especialidad_id' => $especialidadId,
-                'medico_id' => $medicoId,
-                'per_page' => $perPage,
-            ]);
+            ->with(['iafa:id,codigo,descripcion_corta,razon_social']);
+
+        if ($validEstadoAtencion) {
+            $query->where('estado_atencion', $estadoAtencion);
+        }
+
+        $appends = [
+            'fecha' => $fecha,
+            'especialidad_id' => $especialidadId,
+            'medico_id' => $medicoId,
+            'per_page' => $perPage,
+        ];
+        if ($validEstadoAtencion) {
+            $appends['estado_atencion'] = $estadoAtencion;
+        }
+
+        $p = $query->orderBy('hora', 'asc')->paginate($perPage)->appends($appends);
 
         return ['programacion' => $programacion, 'paginator' => $p];
     }
@@ -279,6 +291,7 @@ class AgendaMedicaService
                 'observacion' => $data['observacion'] ?? null,
                 'autorizacion_siteds' => $data['autorizacion_siteds'] ?? null,
                 'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
+                'estado_atencion' => CitaAtencionEstado::PENDIENTE->value,
             ]);
 
             $this->audit->log(

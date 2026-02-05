@@ -27,6 +27,7 @@ class AgendaCita extends Model
         'observacion',
         'autorizacion_siteds',
         'estado',
+        'estado_atencion',
     ];
 
     protected $casts = [
