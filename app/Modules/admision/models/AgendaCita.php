@@ -2,6 +2,7 @@
 
 namespace App\Modules\admision\models;
 
+use App\Core\support\SexoPaciente;
 use Illuminate\Database\Eloquent\Model;
 
 class AgendaCita extends Model
@@ -47,5 +48,14 @@ class AgendaCita extends Model
     public function iafa()
     {
         return $this->belongsTo(Iafa::class, 'iafa_id');
+    }
+
+    public function toArray(): array
+    {
+        $a = parent::toArray();
+        if (array_key_exists('sexo', $a) && $a['sexo'] !== null) {
+            $a['sexo'] = SexoPaciente::formatForDisplay($a['sexo']);
+        }
+        return $a;
     }
 }

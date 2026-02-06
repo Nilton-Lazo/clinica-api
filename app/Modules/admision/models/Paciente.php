@@ -3,6 +3,7 @@
 namespace App\Modules\admision\models;
 
 use App\Core\support\RecordStatus;
+use App\Core\support\SexoPaciente;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,6 +21,7 @@ class Paciente extends Model
         'estado_civil',
         'sexo',
         'fecha_nacimiento',
+        'edad',
         'nacionalidad_iso2',
         'ubigeo_nacimiento',
         'direccion',
@@ -101,14 +103,24 @@ class Paciente extends Model
 
     public function getEdadAttribute(): ?int
     {
+        if (array_key_exists('edad', $this->attributes) && $this->attributes['edad'] !== null) {
+            return (int) $this->attributes['edad'];
+        }
         if (!$this->fecha_nacimiento) {
             return null;
         }
-
         $d = $this->fecha_nacimiento;
         $now = now()->startOfDay();
         $age = $d->diffInYears($now);
-
         return $age >= 0 ? $age : null;
+    }
+
+    public function toArray(): array
+    {
+        $a = parent::toArray();
+        if (array_key_exists('sexo', $a) && $a['sexo'] !== null) {
+            $a['sexo'] = SexoPaciente::formatForDisplay($a['sexo']);
+        }
+        return $a;
     }
 }

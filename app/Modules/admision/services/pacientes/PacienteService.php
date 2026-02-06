@@ -23,6 +23,18 @@ class PacienteService
         return str_pad((string)$n, 10, '0', STR_PAD_LEFT);
     }
 
+    private function edadDesdeFecha($fechaNacimiento): ?int
+    {
+        if (!$fechaNacimiento) {
+            return null;
+        }
+        $d = $fechaNacimiento instanceof \Carbon\Carbon
+            ? $fechaNacimiento
+            : \Carbon\Carbon::parse($fechaNacimiento);
+        $age = $d->diffInYears(now()->startOfDay());
+        return $age >= 0 ? $age : null;
+    }
+
     private function nextNrInt(): int
     {
         $last = Paciente::query()
@@ -188,6 +200,7 @@ class PacienteService
                 'estado_civil' => $data['estado_civil'] ?? null,
                 'sexo' => $data['sexo'] ?? null,
                 'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
+                'edad' => $this->edadDesdeFecha($data['fecha_nacimiento'] ?? null),
 
                 'nacionalidad_iso2' => $data['nacionalidad_iso2'] ?? null,
                 'ubigeo_nacimiento' => $data['ubigeo_nacimiento'] ?? null,
@@ -299,6 +312,7 @@ class PacienteService
                 'estado_civil' => $data['estado_civil'] ?? null,
                 'sexo' => $data['sexo'] ?? null,
                 'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
+                'edad' => $this->edadDesdeFecha($data['fecha_nacimiento'] ?? $paciente->fecha_nacimiento),
 
                 'nacionalidad_iso2' => $data['nacionalidad_iso2'] ?? null,
                 'ubigeo_nacimiento' => $data['ubigeo_nacimiento'] ?? null,

@@ -6,6 +6,7 @@ use App\Modules\admision\controllers\ficheros\MedicoController;
 use App\Modules\admision\controllers\ficheros\TurnoController;
 use App\Modules\admision\controllers\citas\ProgramacionMedicaController;
 use App\Modules\admision\controllers\citas\AgendaMedicaController;
+use App\Modules\admision\controllers\citas\CitaAtencionController;
 use App\Modules\admision\controllers\ficheros\TipoIafaController;
 use App\Modules\admision\controllers\ficheros\IafaController;
 use App\Modules\admision\controllers\ficheros\ContratanteController;
@@ -118,6 +119,8 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::get('agenda-medica', [AgendaMedicaController::class, 'index'])->middleware('throttle:api');
         Route::post('agenda-medica', [AgendaMedicaController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::patch('agenda-medica/{id}/anular', [AgendaMedicaController::class, 'anular'])->middleware('throttle:sensitive-write');
+        Route::get('agenda-medica/{id}/atencion', [CitaAtencionController::class, 'show'])->middleware('throttle:api');
+        Route::post('agenda-medica/{id}/atencion', [CitaAtencionController::class, 'store'])->middleware('throttle:sensitive-write');
     });
 
     Route::prefix('catalogos')->group(function () {
