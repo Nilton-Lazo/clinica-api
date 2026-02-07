@@ -123,6 +123,11 @@ class CitaAtencionService
                 'tarifa_id' => $atencion->tarifa_id ? (int)$atencion->tarifa_id : null,
                 'parentesco_seguro' => $atencion->parentesco_seguro ? (string)$atencion->parentesco_seguro : null,
                 'titular_nombre' => $atencion->titular_nombre ? (string)$atencion->titular_nombre : null,
+                'control_pre_post_natal' => (bool)$atencion->control_pre_post_natal,
+                'control_nino_sano' => (bool)$atencion->control_nino_sano,
+                'chequeo' => (bool)$atencion->chequeo,
+                'carencia' => (bool)$atencion->carencia,
+                'latencia' => (bool)$atencion->latencia,
             ] : null,
         ];
     }
@@ -149,8 +154,15 @@ class CitaAtencionService
         $pacientePlanId = isset($data['paciente_plan_id']) ? (int)$data['paciente_plan_id'] : null;
         $parentescoSeguro = isset($data['parentesco_seguro']) ? trim((string)$data['parentesco_seguro']) : null;
         $titularNombre = isset($data['titular_nombre']) ? trim((string)$data['titular_nombre']) : null;
+        $indicadores = [
+            'control_pre_post_natal' => !empty($data['control_pre_post_natal']),
+            'control_nino_sano' => !empty($data['control_nino_sano']),
+            'chequeo' => !empty($data['chequeo']),
+            'carencia' => !empty($data['carencia']),
+            'latencia' => !empty($data['latencia']),
+        ];
 
-        return DB::transaction(function () use ($cita, $paciente, $pacientePlanId, $parentescoSeguro, $titularNombre) {
+        return DB::transaction(function () use ($cita, $paciente, $pacientePlanId, $parentescoSeguro, $titularNombre, $indicadores) {
             $tarifaId = null;
             if ($pacientePlanId) {
                 $plan = $paciente->planes()->where('id', $pacientePlanId)->first();
@@ -161,12 +173,12 @@ class CitaAtencionService
 
             $atencion = CitaAtencion::query()->where('agenda_cita_id', $cita->id)->first();
             if ($atencion) {
-                $atencion->update([
+                $atencion->update(array_merge([
                     'paciente_plan_id' => $pacientePlanId ?: null,
                     'tarifa_id' => $tarifaId,
                     'parentesco_seguro' => $parentescoSeguro ?: null,
                     'titular_nombre' => $titularNombre ?: null,
-                ]);
+                ], $indicadores));
             }
 
             $paciente->parentesco_seguro = $parentescoSeguro ?: $paciente->parentesco_seguro;
@@ -212,8 +224,15 @@ class CitaAtencionService
         $pacientePlanId = isset($data['paciente_plan_id']) ? (int)$data['paciente_plan_id'] : null;
         $parentescoSeguro = isset($data['parentesco_seguro']) ? trim((string)$data['parentesco_seguro']) : null;
         $titularNombre = isset($data['titular_nombre']) ? trim((string)$data['titular_nombre']) : null;
+        $indicadores = [
+            'control_pre_post_natal' => !empty($data['control_pre_post_natal']),
+            'control_nino_sano' => !empty($data['control_nino_sano']),
+            'chequeo' => !empty($data['chequeo']),
+            'carencia' => !empty($data['carencia']),
+            'latencia' => !empty($data['latencia']),
+        ];
 
-        return DB::transaction(function () use ($cita, $paciente, $acudio, $horaAsistenciaRequest, $pacientePlanId, $parentescoSeguro, $titularNombre) {
+        return DB::transaction(function () use ($cita, $paciente, $acudio, $horaAsistenciaRequest, $pacientePlanId, $parentescoSeguro, $titularNombre, $indicadores) {
             $atencion = CitaAtencion::query()->where('agenda_cita_id', $cita->id)->first();
 
             $nroCuenta = $atencion?->nro_cuenta;
@@ -238,25 +257,21 @@ class CitaAtencionService
                 }
             }
 
+            $atencionPayload = array_merge([
+                'nro_cuenta' => $nroCuenta,
+                'hora_asistencia' => $horaAsistencia,
+                'paciente_plan_id' => $pacientePlanId ?: null,
+                'tarifa_id' => $tarifaId,
+                'parentesco_seguro' => $parentescoSeguro ?: null,
+                'titular_nombre' => $titularNombre ?: null,
+            ], $indicadores);
+
             if ($atencion) {
-                $atencion->update([
-                    'nro_cuenta' => $nroCuenta,
-                    'hora_asistencia' => $horaAsistencia,
-                    'paciente_plan_id' => $pacientePlanId ?: null,
-                    'tarifa_id' => $tarifaId,
-                    'parentesco_seguro' => $parentescoSeguro ?: null,
-                    'titular_nombre' => $titularNombre ?: null,
-                ]);
+                $atencion->update($atencionPayload);
             } else {
-                $atencion = CitaAtencion::create([
+                $atencion = CitaAtencion::create(array_merge([
                     'agenda_cita_id' => $cita->id,
-                    'nro_cuenta' => $nroCuenta,
-                    'hora_asistencia' => $horaAsistencia,
-                    'paciente_plan_id' => $pacientePlanId ?: null,
-                    'tarifa_id' => $tarifaId,
-                    'parentesco_seguro' => $parentescoSeguro ?: null,
-                    'titular_nombre' => $titularNombre ?: null,
-                ]);
+                ], $atencionPayload));
             }
 
             $cita->cuenta = $nroCuenta;

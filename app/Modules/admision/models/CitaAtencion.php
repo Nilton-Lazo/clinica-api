@@ -16,6 +16,19 @@ class CitaAtencion extends Model
         'tarifa_id',
         'parentesco_seguro',
         'titular_nombre',
+        'control_pre_post_natal',
+        'control_nino_sano',
+        'chequeo',
+        'carencia',
+        'latencia',
+    ];
+
+    protected $casts = [
+        'control_pre_post_natal' => 'boolean',
+        'control_nino_sano' => 'boolean',
+        'chequeo' => 'boolean',
+        'carencia' => 'boolean',
+        'latencia' => 'boolean',
     ];
 
 

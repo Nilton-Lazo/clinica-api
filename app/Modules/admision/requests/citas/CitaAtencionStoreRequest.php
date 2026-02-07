@@ -20,6 +20,11 @@ class CitaAtencionStoreRequest extends FormRequest
             'paciente_plan_id' => ['nullable', 'integer', 'exists:paciente_planes,id'],
             'parentesco_seguro' => ['nullable', 'string', 'max:30'],
             'titular_nombre' => ['nullable', 'string', 'max:255'],
+            'control_pre_post_natal' => ['sometimes', 'boolean'],
+            'control_nino_sano' => ['sometimes', 'boolean'],
+            'chequeo' => ['sometimes', 'boolean'],
+            'carencia' => ['sometimes', 'boolean'],
+            'latencia' => ['sometimes', 'boolean'],
         ];
     }
 }
