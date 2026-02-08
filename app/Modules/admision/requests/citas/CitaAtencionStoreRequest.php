@@ -25,6 +25,17 @@ class CitaAtencionStoreRequest extends FormRequest
             'chequeo' => ['sometimes', 'boolean'],
             'carencia' => ['sometimes', 'boolean'],
             'latencia' => ['sometimes', 'boolean'],
+
+            'servicios' => ['sometimes', 'array'],
+            'servicios.*.tarifa_servicio_id' => ['required', 'integer', 'exists:tarifa_servicios,id'],
+            'servicios.*.medico_id' => ['required', 'integer', 'exists:medicos,id'],
+            'servicios.*.cop_var' => ['sometimes', 'numeric', 'min:0'],
+            'servicios.*.cop_fijo' => ['sometimes', 'numeric', 'min:0'],
+            'servicios.*.descuento_pct' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'servicios.*.aumento_pct' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'servicios.*.cantidad' => ['sometimes', 'numeric', 'min:0.001'],
+            'servicios.*.precio_sin_igv' => ['required', 'numeric', 'min:0'],
+            'servicios.*.precio_con_igv' => ['required', 'numeric', 'min:0'],
         ];
     }
 }

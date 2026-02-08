@@ -8,6 +8,7 @@ use App\Core\support\RecordStatus;
 use App\Core\support\SexoPaciente;
 use App\Modules\admision\models\AgendaCita;
 use App\Modules\admision\models\CitaAtencion;
+use App\Modules\admision\models\CitaAtencionServicio;
 use App\Modules\admision\models\Paciente;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -66,6 +67,36 @@ class CitaAtencionService
         $atencion = CitaAtencion::query()
             ->where('agenda_cita_id', $agendaCitaId)
             ->first();
+
+        $serviciosPayload = [];
+        if ($atencion) {
+            $servicios = CitaAtencionServicio::query()
+                ->where('cita_atencion_id', $atencion->id)
+                ->with(['tarifaServicio:id,codigo,descripcion,precio_sin_igv', 'medico:id,codigo,nombres,apellido_paterno,apellido_materno', 'user:id,name,username'])
+                ->get();
+            foreach ($servicios as $s) {
+                $ts = $s->tarifaServicio;
+                $med = $s->medico;
+                $serviciosPayload[] = [
+                    'id' => (int)$s->id,
+                    'tarifa_servicio_id' => (int)$s->tarifa_servicio_id,
+                    'servicio_codigo' => $ts ? (string)$ts->codigo : null,
+                    'servicio_descripcion' => $ts ? (string)$ts->descripcion : null,
+                    'medico_id' => (int)$s->medico_id,
+                    'medico_codigo' => $med ? (string)$med->codigo : null,
+                    'medico_nombre' => $med ? trim($med->apellido_paterno . ' ' . $med->apellido_materno . ' ' . $med->nombres) : null,
+                    'user_id' => $s->user_id ? (int)$s->user_id : null,
+                    'user_nombre' => $s->user ? (string)$s->user->username : null,
+                    'cop_var' => (float)$s->cop_var,
+                    'cop_fijo' => (float)$s->cop_fijo,
+                    'descuento_pct' => (float)$s->descuento_pct,
+                    'aumento_pct' => (float)$s->aumento_pct,
+                    'cantidad' => (float)$s->cantidad,
+                    'precio_sin_igv' => (float)$s->precio_sin_igv,
+                    'precio_con_igv' => (float)$s->precio_con_igv,
+                ];
+            }
+        }
 
         $programacion = $cita->programacion;
         $horaStr = $cita->hora ? (is_string($cita->hora) ? substr($cita->hora, 0, 5) : $cita->hora->format('H:i')) : null;
@@ -129,6 +160,7 @@ class CitaAtencionService
                 'carencia' => (bool)$atencion->carencia,
                 'latencia' => (bool)$atencion->latencia,
             ] : null,
+            'servicios' => $serviciosPayload,
         ];
     }
 
@@ -154,6 +186,7 @@ class CitaAtencionService
         $pacientePlanId = isset($data['paciente_plan_id']) ? (int)$data['paciente_plan_id'] : null;
         $parentescoSeguro = isset($data['parentesco_seguro']) ? trim((string)$data['parentesco_seguro']) : null;
         $titularNombre = isset($data['titular_nombre']) ? trim((string)$data['titular_nombre']) : null;
+        $serviciosInput = $data['servicios'] ?? null;
         $indicadores = [
             'control_pre_post_natal' => !empty($data['control_pre_post_natal']),
             'control_nino_sano' => !empty($data['control_nino_sano']),
@@ -162,7 +195,7 @@ class CitaAtencionService
             'latencia' => !empty($data['latencia']),
         ];
 
-        return DB::transaction(function () use ($cita, $paciente, $pacientePlanId, $parentescoSeguro, $titularNombre, $indicadores) {
+        return DB::transaction(function () use ($cita, $paciente, $pacientePlanId, $parentescoSeguro, $titularNombre, $serviciosInput, $indicadores) {
             $tarifaId = null;
             if ($pacientePlanId) {
                 $plan = $paciente->planes()->where('id', $pacientePlanId)->first();
@@ -172,13 +205,24 @@ class CitaAtencionService
             }
 
             $atencion = CitaAtencion::query()->where('agenda_cita_id', $cita->id)->first();
+            $atencionPayload = array_merge([
+                'paciente_plan_id' => $pacientePlanId ?: null,
+                'tarifa_id' => $tarifaId,
+                'parentesco_seguro' => $parentescoSeguro ?: null,
+                'titular_nombre' => $titularNombre ?: null,
+            ], $indicadores);
             if ($atencion) {
-                $atencion->update(array_merge([
-                    'paciente_plan_id' => $pacientePlanId ?: null,
-                    'tarifa_id' => $tarifaId,
-                    'parentesco_seguro' => $parentescoSeguro ?: null,
-                    'titular_nombre' => $titularNombre ?: null,
-                ], $indicadores));
+                $atencion->update($atencionPayload);
+                if (is_array($serviciosInput)) {
+                    $this->syncServicios($atencion, $serviciosInput);
+                }
+            } else {
+                $atencion = CitaAtencion::create(array_merge([
+                    'agenda_cita_id' => $cita->id,
+                ], $atencionPayload));
+                if (is_array($serviciosInput) && !empty($serviciosInput)) {
+                    $this->syncServicios($atencion, $serviciosInput);
+                }
             }
 
             $paciente->parentesco_seguro = $parentescoSeguro ?: $paciente->parentesco_seguro;
@@ -231,8 +275,9 @@ class CitaAtencionService
             'carencia' => !empty($data['carencia']),
             'latencia' => !empty($data['latencia']),
         ];
+        $serviciosInput = $data['servicios'] ?? null;
 
-        return DB::transaction(function () use ($cita, $paciente, $acudio, $horaAsistenciaRequest, $pacientePlanId, $parentescoSeguro, $titularNombre, $indicadores) {
+        return DB::transaction(function () use ($cita, $paciente, $acudio, $horaAsistenciaRequest, $pacientePlanId, $parentescoSeguro, $titularNombre, $indicadores, $serviciosInput) {
             $atencion = CitaAtencion::query()->where('agenda_cita_id', $cita->id)->first();
 
             $nroCuenta = $atencion?->nro_cuenta;
@@ -274,6 +319,10 @@ class CitaAtencionService
                 ], $atencionPayload));
             }
 
+            if (is_array($serviciosInput)) {
+                $this->syncServicios($atencion, $serviciosInput);
+            }
+
             $cita->cuenta = $nroCuenta;
             $cita->estado_atencion = CitaAtencionEstado::ATENDIDO->value;
             $cita->save();
@@ -309,6 +358,36 @@ class CitaAtencionService
 
         $nextInt = $last !== null ? (int)$last + 1 : 1;
         return str_pad((string)$nextInt, 10, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * @param array<int, array{tarifa_servicio_id: int, medico_id: int, cop_var?: float, cop_fijo?: float, descuento_pct?: float, aumento_pct?: float, cantidad?: float, precio_sin_igv: float, precio_con_igv: float}> $servicios
+     */
+    private function syncServicios(CitaAtencion $atencion, array $servicios): void
+    {
+        CitaAtencionServicio::query()->where('cita_atencion_id', $atencion->id)->delete();
+
+        $userId = auth()->id();
+        foreach ($servicios as $s) {
+            $tarifaServicioId = (int)($s['tarifa_servicio_id'] ?? 0);
+            $medicoId = (int)($s['medico_id'] ?? 0);
+            if ($tarifaServicioId <= 0 || $medicoId <= 0) {
+                continue;
+            }
+            CitaAtencionServicio::create([
+                'cita_atencion_id' => $atencion->id,
+                'tarifa_servicio_id' => $tarifaServicioId,
+                'medico_id' => $medicoId,
+                'user_id' => $userId,
+                'cop_var' => (float)($s['cop_var'] ?? 0),
+                'cop_fijo' => (float)($s['cop_fijo'] ?? 0),
+                'descuento_pct' => (float)($s['descuento_pct'] ?? 0),
+                'aumento_pct' => (float)($s['aumento_pct'] ?? 0),
+                'cantidad' => (float)($s['cantidad'] ?? 1),
+                'precio_sin_igv' => (float)($s['precio_sin_igv'] ?? 0),
+                'precio_con_igv' => (float)($s['precio_con_igv'] ?? 0),
+            ]);
+        }
     }
 
     private function calcularEdad($fechaNacimiento): ?int

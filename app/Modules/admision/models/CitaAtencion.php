@@ -46,4 +46,9 @@ class CitaAtencion extends Model
     {
         return $this->belongsTo(Tarifa::class, 'tarifa_id');
     }
+
+    public function servicios()
+    {
+        return $this->hasMany(CitaAtencionServicio::class, 'cita_atencion_id');
+    }
 }

@@ -125,10 +125,19 @@ class TarifarioCatalogoService
         }
 
         if ($q !== null && $q !== '') {
-            $query->where(function ($sub) use ($q) {
+            $qCompact = str_replace('.', '', $q);
+            $query->where(function ($sub) use ($q, $qCompact) {
                 $sub->where('ts.codigo', 'ilike', "%{$q}%")
                     ->orWhere('ts.descripcion', 'ilike', "%{$q}%")
-                    ->orWhere('ts.nomenclador', 'ilike', "%{$q}%");
+                    ->orWhere(function ($n) use ($q, $qCompact) {
+                        $n->whereNotNull('ts.nomenclador')
+                            ->where(function ($nq) use ($q, $qCompact) {
+                                $nq->where('ts.nomenclador', 'ilike', "%{$q}%");
+                                if ($qCompact !== $q && $qCompact !== '') {
+                                    $nq->orWhere('ts.nomenclador', 'ilike', "%{$qCompact}%");
+                                }
+                            });
+                    });
             });
         }
 
