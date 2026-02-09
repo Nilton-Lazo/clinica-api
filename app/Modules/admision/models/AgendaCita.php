@@ -50,6 +50,11 @@ class AgendaCita extends Model
         return $this->belongsTo(Iafa::class, 'iafa_id');
     }
 
+    public function atencion()
+    {
+        return $this->hasOne(CitaAtencion::class, 'agenda_cita_id');
+    }
+
     public function toArray(): array
     {
         $a = parent::toArray();

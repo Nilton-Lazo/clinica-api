@@ -385,6 +385,10 @@ class CitaAtencionService
         }
         $sum = 0;
         foreach ($serviciosInput as $s) {
+            $estado = isset($s['estado_facturacion']) ? (string)$s['estado_facturacion'] : EstadoFacturacionServicio::PENDIENTE->value;
+            if ($estado !== EstadoFacturacionServicio::PENDIENTE->value) {
+                continue;
+            }
             $sum += (float)($s['precio_con_igv'] ?? 0);
         }
         return round($sum, 4);
@@ -392,12 +396,18 @@ class CitaAtencionService
 
     private function nextNroCuenta(): string
     {
-        $last = CitaAtencion::query()
+        $driver = \Illuminate\Support\Facades\DB::getDriverName();
+        $query = CitaAtencion::query()
             ->whereNotNull('nro_cuenta')
-            ->where('nro_cuenta', '!=', '')
-            ->orderByRaw('CAST(nro_cuenta AS UNSIGNED) DESC')
-            ->value('nro_cuenta');
+            ->where('nro_cuenta', '!=', '');
 
+        if ($driver === 'pgsql') {
+            $query->orderByRaw('CAST(nro_cuenta AS INTEGER) DESC');
+        } else {
+            $query->orderByRaw('CAST(nro_cuenta AS UNSIGNED) DESC');
+        }
+
+        $last = $query->value('nro_cuenta');
         $nextInt = $last !== null ? (int)$last + 1 : 1;
         return str_pad((string)$nextInt, 10, '0', STR_PAD_LEFT);
     }

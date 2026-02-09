@@ -127,7 +127,7 @@ class AgendaMedicaService
         $query = AgendaCita::query()
             ->where('programacion_medica_id', $programacion->id)
             ->where('estado', RecordStatus::ACTIVO->value)
-            ->with(['iafa:id,codigo,descripcion_corta,razon_social']);
+            ->with(['iafa:id,codigo,descripcion_corta,razon_social', 'atencion:id,agenda_cita_id,hora_asistencia']);
 
         if ($validEstadoAtencion) {
             $query->where('estado_atencion', $estadoAtencion);

@@ -53,9 +53,16 @@ class AgendaMedicaController extends Controller
         }
 
         $p = $res['paginator'];
+        $items = collect($p->items())->map(function (AgendaCita $cita) {
+            $arr = $cita->toArray();
+            $arr['hora_ingreso'] = $cita->atencion && $cita->atencion->hora_asistencia
+                ? substr((string)$cita->atencion->hora_asistencia, 0, 5)
+                : null;
+            return $arr;
+        })->all();
 
         return response()->json([
-            'data' => $p->items(),
+            'data' => $items,
             'meta' => [
                 'current_page' => $p->currentPage(),
                 'per_page' => $p->perPage(),
