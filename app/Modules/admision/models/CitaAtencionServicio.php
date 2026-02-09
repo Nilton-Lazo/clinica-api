@@ -29,8 +29,8 @@ class CitaAtencionServicio extends Model
         'descuento_pct' => 'decimal:3',
         'aumento_pct' => 'decimal:3',
         'cantidad' => 'decimal:3',
-        'precio_sin_igv' => 'decimal:3',
-        'precio_con_igv' => 'decimal:3',
+        'precio_sin_igv' => 'decimal:4',
+        'precio_con_igv' => 'decimal:4',
     ];
 
     public function citaAtencion()

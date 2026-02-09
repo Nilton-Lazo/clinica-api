@@ -24,8 +24,8 @@ class TarifaServicio extends Model
     ];
 
     protected $casts = [
-        'precio_sin_igv' => 'decimal:3',
-        'unidad' => 'decimal:3',
+        'precio_sin_igv' => 'decimal:4',
+        'unidad' => 'decimal:4',
     ];
 
     public function tarifa()

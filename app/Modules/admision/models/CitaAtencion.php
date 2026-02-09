@@ -21,6 +21,10 @@ class CitaAtencion extends Model
         'chequeo',
         'carencia',
         'latencia',
+        'monto_a_pagar',
+        'soat_activo',
+        'soat_numero_poliza',
+        'soat_numero_placa',
     ];
 
     protected $casts = [
@@ -29,6 +33,8 @@ class CitaAtencion extends Model
         'chequeo' => 'boolean',
         'carencia' => 'boolean',
         'latencia' => 'boolean',
+        'monto_a_pagar' => 'decimal:4',
+        'soat_activo' => 'boolean',
     ];
 
 

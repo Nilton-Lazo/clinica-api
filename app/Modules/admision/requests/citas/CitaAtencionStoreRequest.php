@@ -27,6 +27,10 @@ class CitaAtencionStoreRequest extends FormRequest
             'chequeo' => ['sometimes', 'boolean'],
             'carencia' => ['sometimes', 'boolean'],
             'latencia' => ['sometimes', 'boolean'],
+            'monto_a_pagar' => ['sometimes', 'numeric', 'min:0'],
+            'soat_activo' => ['sometimes', 'boolean'],
+            'soat_numero_poliza' => ['nullable', 'string', 'max:50'],
+            'soat_numero_placa' => ['nullable', 'string', 'max:20'],
 
             'servicios' => ['sometimes', 'array'],
             'servicios.*.tarifa_servicio_id' => ['required', 'integer', 'exists:tarifa_servicios,id'],

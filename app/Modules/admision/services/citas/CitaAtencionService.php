@@ -163,6 +163,10 @@ class CitaAtencionService
                 'chequeo' => (bool)$atencion->chequeo,
                 'carencia' => (bool)$atencion->carencia,
                 'latencia' => (bool)$atencion->latencia,
+                'monto_a_pagar' => (float)$atencion->monto_a_pagar,
+                'soat_activo' => (bool)$atencion->soat_activo,
+                'soat_numero_poliza' => $atencion->soat_numero_poliza ? (string)$atencion->soat_numero_poliza : null,
+                'soat_numero_placa' => $atencion->soat_numero_placa ? (string)$atencion->soat_numero_placa : null,
             ] : null,
             'servicios' => $serviciosPayload,
         ];
@@ -191,6 +195,10 @@ class CitaAtencionService
         $parentescoSeguro = isset($data['parentesco_seguro']) ? trim((string)$data['parentesco_seguro']) : null;
         $titularNombre = isset($data['titular_nombre']) ? trim((string)$data['titular_nombre']) : null;
         $serviciosInput = $data['servicios'] ?? null;
+        $montoAPagar = isset($data['monto_a_pagar']) ? (float)$data['monto_a_pagar'] : null;
+        $soatActivo = !empty($data['soat_activo']);
+        $soatNumeroPoliza = isset($data['soat_numero_poliza']) ? trim((string)$data['soat_numero_poliza']) : null;
+        $soatNumeroPlaca = isset($data['soat_numero_placa']) ? trim((string)$data['soat_numero_placa']) : null;
         $indicadores = [
             'control_pre_post_natal' => !empty($data['control_pre_post_natal']),
             'control_nino_sano' => !empty($data['control_nino_sano']),
@@ -199,7 +207,7 @@ class CitaAtencionService
             'latencia' => !empty($data['latencia']),
         ];
 
-        return DB::transaction(function () use ($cita, $paciente, $pacientePlanId, $parentescoSeguro, $titularNombre, $serviciosInput, $indicadores) {
+        return DB::transaction(function () use ($cita, $paciente, $pacientePlanId, $parentescoSeguro, $titularNombre, $serviciosInput, $montoAPagar, $soatActivo, $soatNumeroPoliza, $soatNumeroPlaca, $indicadores) {
             $tarifaId = null;
             if ($pacientePlanId) {
                 $plan = $paciente->planes()->where('id', $pacientePlanId)->first();
@@ -214,6 +222,10 @@ class CitaAtencionService
                 'tarifa_id' => $tarifaId,
                 'parentesco_seguro' => $parentescoSeguro ?: null,
                 'titular_nombre' => $titularNombre ?: null,
+                'monto_a_pagar' => $this->resolveMontoAPagar($montoAPagar, $serviciosInput),
+                'soat_activo' => $soatActivo,
+                'soat_numero_poliza' => $soatActivo && $soatNumeroPoliza !== '' ? $soatNumeroPoliza : null,
+                'soat_numero_placa' => $soatActivo && $soatNumeroPlaca !== '' ? $soatNumeroPlaca : null,
             ], $indicadores);
             if ($atencion) {
                 $atencion->update($atencionPayload);
@@ -280,8 +292,12 @@ class CitaAtencionService
             'latencia' => !empty($data['latencia']),
         ];
         $serviciosInput = $data['servicios'] ?? null;
+        $montoAPagar = isset($data['monto_a_pagar']) ? (float)$data['monto_a_pagar'] : null;
+        $soatActivo = !empty($data['soat_activo']);
+        $soatNumeroPoliza = isset($data['soat_numero_poliza']) ? trim((string)$data['soat_numero_poliza']) : null;
+        $soatNumeroPlaca = isset($data['soat_numero_placa']) ? trim((string)$data['soat_numero_placa']) : null;
 
-        return DB::transaction(function () use ($cita, $paciente, $acudio, $horaAsistenciaRequest, $pacientePlanId, $parentescoSeguro, $titularNombre, $indicadores, $serviciosInput) {
+        return DB::transaction(function () use ($cita, $paciente, $acudio, $horaAsistenciaRequest, $pacientePlanId, $parentescoSeguro, $titularNombre, $indicadores, $serviciosInput, $montoAPagar, $soatActivo, $soatNumeroPoliza, $soatNumeroPlaca) {
             $atencion = CitaAtencion::query()->where('agenda_cita_id', $cita->id)->first();
 
             $nroCuenta = $atencion?->nro_cuenta;
@@ -313,6 +329,10 @@ class CitaAtencionService
                 'tarifa_id' => $tarifaId,
                 'parentesco_seguro' => $parentescoSeguro ?: null,
                 'titular_nombre' => $titularNombre ?: null,
+                'monto_a_pagar' => $this->resolveMontoAPagar($montoAPagar, $serviciosInput),
+                'soat_activo' => $soatActivo,
+                'soat_numero_poliza' => $soatActivo && $soatNumeroPoliza !== '' ? $soatNumeroPoliza : null,
+                'soat_numero_placa' => $soatActivo && $soatNumeroPlaca !== '' ? $soatNumeroPlaca : null,
             ], $indicadores);
 
             if ($atencion) {
@@ -350,6 +370,24 @@ class CitaAtencionService
 
             return $this->datosParaAtencion((int)$cita->id);
         });
+    }
+
+    /**
+     * Monto a pagar: si se envía valor válido se usa; si no, se calcula desde servicios (suma precio_con_igv).
+     */
+    private function resolveMontoAPagar(?float $montoEnviado, ?array $serviciosInput): float
+    {
+        if ($montoEnviado !== null && $montoEnviado >= 0) {
+            return round($montoEnviado, 4);
+        }
+        if (!is_array($serviciosInput)) {
+            return 0;
+        }
+        $sum = 0;
+        foreach ($serviciosInput as $s) {
+            $sum += (float)($s['precio_con_igv'] ?? 0);
+        }
+        return round($sum, 4);
     }
 
     private function nextNroCuenta(): string
