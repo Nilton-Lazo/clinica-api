@@ -2,7 +2,9 @@
 
 namespace App\Modules\admision\requests\citas;
 
+use App\Core\support\EstadoFacturacionServicio;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CitaAtencionStoreRequest extends FormRequest
 {
@@ -36,6 +38,7 @@ class CitaAtencionStoreRequest extends FormRequest
             'servicios.*.cantidad' => ['sometimes', 'numeric', 'min:0.001'],
             'servicios.*.precio_sin_igv' => ['required', 'numeric', 'min:0'],
             'servicios.*.precio_con_igv' => ['required', 'numeric', 'min:0'],
+            'servicios.*.estado_facturacion' => ['sometimes', 'string', Rule::in(EstadoFacturacionServicio::values())],
         ];
     }
 }

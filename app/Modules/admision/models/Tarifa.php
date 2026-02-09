@@ -86,6 +86,11 @@ class Tarifa extends Model
         return $this->hasMany(TarifaServicio::class, 'tarifa_id');
     }
 
+    public function recargosNoche()
+    {
+        return $this->hasMany(TarifaRecargoNoche::class, 'tarifa_id');
+    }
+
     public function scopeActivos(Builder $query): Builder
     {
         return $query->where('estado', RecordStatus::ACTIVO->value);

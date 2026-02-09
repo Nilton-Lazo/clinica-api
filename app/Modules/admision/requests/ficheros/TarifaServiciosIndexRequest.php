@@ -28,6 +28,8 @@ class TarifaServiciosIndexRequest extends FormRequest
 
             'categoria_id' => ['sometimes', 'integer', 'min:1'],
             'subcategoria_id' => ['sometimes', 'integer', 'min:1'],
+
+            'hora' => ['sometimes', 'string', 'regex:/^\d{1,2}:\d{2}(:\d{2})?$/'],
         ];
     }
 
@@ -42,6 +44,17 @@ class TarifaServiciosIndexRequest extends FormRequest
 
         if ($this->has('status')) {
             $this->merge(['status' => strtoupper(trim((string)$this->input('status')))]);
+        }
+
+        if ($this->has('hora')) {
+            $h = trim((string)$this->input('hora'));
+            if ($h !== '' && str_contains($h, ' ')) {
+                $parts = explode(' ', $h);
+                $timePart = end($parts);
+                if (preg_match('/^\d{1,2}:\d{2}(?::\d{2})?$/', trim($timePart))) {
+                    $this->merge(['hora' => trim($timePart)]);
+                }
+            }
         }
     }
 }

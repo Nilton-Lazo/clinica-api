@@ -4,10 +4,14 @@ namespace App\Modules\admision\services\ficheros;
 
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Tarifa;
+use App\Modules\admision\models\TarifaRecargoNoche;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\LengthAwarePaginator as LengthAwarePaginatorConcrete;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class TarifarioCatalogoService
 {
@@ -66,6 +70,54 @@ class TarifarioCatalogoService
                 'tarifa_id' => ['La tarifa debe estar ACTIVA.'],
             ]);
         }
+    }
+
+    /**
+     * Normaliza el parámetro hora a H:i:s para createFromFormat.
+     * Acepta: "HH:mm", "HH:mm:ss", o datetime "YYYY-MM-DD HH:mm:ss" (extrae la parte hora).
+     */
+    private function normalizarHoraParaRecargo(string $hora): ?string
+    {
+        $h = trim($hora);
+        if ($h === '') {
+            return null;
+        }
+        if (preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/', $h, $m)) {
+            $hh = (int)$m[1];
+            $mm = (int)$m[2];
+            $ss = isset($m[3]) ? (int)$m[3] : 0;
+            if ($hh < 0 || $hh > 23 || $mm < 0 || $mm > 59 || $ss < 0 || $ss > 59) {
+                return null;
+            }
+            return sprintf('%02d:%02d:%02d', $hh, $mm, $ss);
+        }
+        if (preg_match('/(\d{1,2}):(\d{2})(?::(\d{2}))?/', $h, $m)) {
+            $hh = (int)$m[1];
+            $mm = (int)$m[2];
+            $ss = isset($m[3]) ? (int)$m[3] : 0;
+            if ($hh < 0 || $hh > 23 || $mm < 0 || $mm > 59 || $ss < 0 || $ss > 59) {
+                return null;
+            }
+            return sprintf('%02d:%02d:%02d', $hh, $mm, $ss);
+        }
+        return null;
+    }
+
+    /**
+     * Indica si la hora de referencia cae dentro del rango [desde, hasta).
+     * Si desde > hasta se considera rango nocturno (ej. 19:00 a 07:00): aplica si time >= desde o time < hasta.
+     * Si desde <= hasta: aplica si time >= desde y time < hasta.
+     */
+    private function horaEnRangoRecargo(Carbon $horaRef, Carbon $desde, Carbon $hasta): bool
+    {
+        $refMinutos = $horaRef->hour * 60 + $horaRef->minute;
+        $desdeMinutos = $desde->hour * 60 + $desde->minute;
+        $hastaMinutos = $hasta->hour * 60 + $hasta->minute;
+
+        if ($desdeMinutos <= $hastaMinutos) {
+            return $refMinutos >= $desdeMinutos && $refMinutos < $hastaMinutos;
+        }
+        return $refMinutos >= $desdeMinutos || $refMinutos < $hastaMinutos;
     }
 
     public function paginateServicios(Tarifa $tarifa, array $filters): LengthAwarePaginator
@@ -145,7 +197,53 @@ class TarifarioCatalogoService
             ->orderBy('tsc.codigo')
             ->orderBy('ts.servicio_codigo');
 
-        return $query->paginate($perPage);
+        $paginator = $query->paginate($perPage);
+        $horaStr = isset($filters['hora']) && is_string($filters['hora']) ? trim($filters['hora']) : null;
+        $reglasPorCategoria = [];
+
+        if ($horaStr !== null && $horaStr !== '') {
+            $horaInput = $this->normalizarHoraParaRecargo($horaStr);
+            $horaRef = $horaInput !== null ? Carbon::createFromFormat('H:i:s', $horaInput) : null;
+            if ($horaRef && Schema::hasTable('tarifa_recargo_noche')) {
+                try {
+                    $rules = TarifaRecargoNoche::query()
+                        ->where('tarifa_id', (int)$tarifa->id)
+                        ->where('estado', \App\Core\support\RecordStatus::ACTIVO->value)
+                        ->get();
+                    foreach ($rules as $r) {
+                        $desde = Carbon::parse($r->hora_desde);
+                        $hasta = $r->hora_hasta !== null && $r->hora_hasta !== ''
+                            ? Carbon::parse($r->hora_hasta)
+                            : Carbon::parse($r->hora_desde)->copy()->addHours(12);
+                        $activo = $this->horaEnRangoRecargo($horaRef, $desde, $hasta);
+                        if ($activo) {
+                            $reglasPorCategoria[(int)$r->tarifa_categoria_id] = (float)$r->porcentaje;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    $reglasPorCategoria = [];
+                }
+            }
+        }
+
+        $items = collect($paginator->items())->map(function ($row) use ($reglasPorCategoria) {
+            $arr = (array)$row;
+            $catId = (int)($arr['categoria_id'] ?? 0);
+            $activo = isset($reglasPorCategoria[$catId]);
+            $arr['recargo_noche_activo'] = $activo;
+            $arr['recargo_noche_porcentaje'] = $activo ? $reglasPorCategoria[$catId] : 0;
+            return (object)$arr;
+        });
+
+        $paginator = new LengthAwarePaginatorConcrete(
+            $items,
+            $paginator->total(),
+            $paginator->perPage(),
+            $paginator->currentPage(),
+            ['path' => $paginator->path()]
+        );
+
+        return $paginator;
     }
 
     public function arbolTarifaBase(): array

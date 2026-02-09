@@ -4,6 +4,7 @@ namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
 use App\Core\support\CitaAtencionEstado;
+use App\Core\support\EstadoFacturacionServicio;
 use App\Core\support\RecordStatus;
 use App\Core\support\SexoPaciente;
 use App\Modules\admision\models\AgendaCita;
@@ -94,6 +95,9 @@ class CitaAtencionService
                     'cantidad' => (float)$s->cantidad,
                     'precio_sin_igv' => (float)$s->precio_sin_igv,
                     'precio_con_igv' => (float)$s->precio_con_igv,
+                    'estado_facturacion' => $s->estado_facturacion && in_array((string)$s->estado_facturacion, EstadoFacturacionServicio::values(), true)
+                    ? (string)$s->estado_facturacion
+                    : EstadoFacturacionServicio::PENDIENTE->value,
                 ];
             }
         }
@@ -361,7 +365,7 @@ class CitaAtencionService
     }
 
     /**
-     * @param array<int, array{tarifa_servicio_id: int, medico_id: int, cop_var?: float, cop_fijo?: float, descuento_pct?: float, aumento_pct?: float, cantidad?: float, precio_sin_igv: float, precio_con_igv: float}> $servicios
+     * @param array<int, array{tarifa_servicio_id: int, medico_id: int, cop_var?: float, cop_fijo?: float, descuento_pct?: float, aumento_pct?: float, cantidad?: float, precio_sin_igv: float, precio_con_igv: float, estado_facturacion?: string}> $servicios
      */
     private function syncServicios(CitaAtencion $atencion, array $servicios): void
     {
@@ -374,6 +378,9 @@ class CitaAtencionService
             if ($tarifaServicioId <= 0 || $medicoId <= 0) {
                 continue;
             }
+            $estadoFacturacion = isset($s['estado_facturacion']) && in_array((string)$s['estado_facturacion'], EstadoFacturacionServicio::values(), true)
+                ? (string)$s['estado_facturacion']
+                : EstadoFacturacionServicio::PENDIENTE->value;
             CitaAtencionServicio::create([
                 'cita_atencion_id' => $atencion->id,
                 'tarifa_servicio_id' => $tarifaServicioId,
@@ -386,6 +393,7 @@ class CitaAtencionService
                 'cantidad' => (float)($s['cantidad'] ?? 1),
                 'precio_sin_igv' => (float)($s['precio_sin_igv'] ?? 0),
                 'precio_con_igv' => (float)($s['precio_con_igv'] ?? 0),
+                'estado_facturacion' => $estadoFacturacion,
             ]);
         }
     }

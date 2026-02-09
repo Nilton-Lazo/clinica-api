@@ -20,6 +20,7 @@ use App\Modules\admision\controllers\ficheros\TarifaCategoriaController;
 use App\Modules\admision\controllers\ficheros\TarifaSubcategoriaController;
 use App\Modules\admision\controllers\ficheros\TarifaServicioController;
 use App\Modules\admision\controllers\ficheros\ParametroSistemaController;
+use App\Modules\admision\controllers\ficheros\TarifaRecargoNocheController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -105,6 +106,11 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::post('tarifas/{tarifa}/servicios-crud', [TarifaServicioController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::put('tarifas/{tarifa}/servicios-crud/{servicio}', [TarifaServicioController::class, 'update'])->middleware('throttle:sensitive-write');
         Route::patch('tarifas/{tarifa}/servicios-crud/{servicio}/desactivar', [TarifaServicioController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+        Route::get('tarifas/{tarifa}/recargo-noche', [TarifaRecargoNocheController::class, 'index'])->middleware('throttle:api');
+        Route::post('tarifas/{tarifa}/recargo-noche', [TarifaRecargoNocheController::class, 'store'])->middleware('throttle:sensitive-write');
+        Route::put('tarifas/{tarifa}/recargo-noche/{recargoNoche}', [TarifaRecargoNocheController::class, 'update'])->middleware('throttle:sensitive-write');
+        Route::patch('tarifas/{tarifa}/recargo-noche/{recargoNoche}/desactivar', [TarifaRecargoNocheController::class, 'deactivate'])->middleware('throttle:sensitive-write');
 
         Route::get('parametros/igv', [ParametroSistemaController::class, 'getIgv'])->middleware('throttle:api');
         Route::put('parametros/igv', [ParametroSistemaController::class, 'updateIgv'])->middleware('throttle:sensitive-write');

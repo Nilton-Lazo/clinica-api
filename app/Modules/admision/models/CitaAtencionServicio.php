@@ -20,6 +20,7 @@ class CitaAtencionServicio extends Model
         'cantidad',
         'precio_sin_igv',
         'precio_con_igv',
+        'estado_facturacion',
     ];
 
     protected $casts = [
