@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\admision\controllers\ficheros\GrupoServicioController;
 use App\Modules\admision\controllers\ficheros\TarifaController;
 use App\Modules\admision\controllers\ficheros\TarifaCategoriaController;
 use App\Modules\admision\controllers\ficheros\TarifaClonacionController;
@@ -17,7 +18,9 @@ Route::prefix('facturacion')->middleware(['auth:sanctum', 'token.fresh', 'audit'
         Route::patch('tarifas/{tarifa}/marcar-base', [TarifaController::class, 'setBase'])->middleware('throttle:sensitive-write');
         Route::patch('tarifas/{tarifa}/desactivar', [TarifaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
 
+        Route::get('grupos-servicio', [GrupoServicioController::class, 'lookup'])->middleware('throttle:api');
         Route::get('tarifas/operativas', [TarifarioCatalogoController::class, 'tarifasOperativas'])->middleware('throttle:api');
+        Route::get('tarifas/para-gestion-tarifario', [TarifarioCatalogoController::class, 'tarifasParaGestionTarifario'])->middleware('throttle:api');
         Route::get('tarifas/base', [TarifarioCatalogoController::class, 'tarifaBase'])->middleware('throttle:api');
         Route::get('tarifas/base/arbol', [TarifarioCatalogoController::class, 'arbolBase'])->middleware('throttle:api');
         Route::get('tarifas/{tarifa}/servicios', [TarifarioCatalogoController::class, 'servicios'])->middleware('throttle:api');

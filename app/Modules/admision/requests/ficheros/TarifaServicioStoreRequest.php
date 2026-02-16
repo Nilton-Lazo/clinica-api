@@ -21,6 +21,7 @@ class TarifaServicioStoreRequest extends FormRequest
 
             'precio_sin_igv' => ['required', 'numeric', 'min:0'],
             'unidad' => ['required', 'numeric', 'min:0.001'],
+            'grupo_codigo' => ['nullable', 'string', 'max:20'],
 
             'estado' => ['sometimes', 'string', Rule::in(RecordStatus::values())],
         ];

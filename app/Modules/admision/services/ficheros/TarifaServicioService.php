@@ -4,6 +4,7 @@ namespace App\Modules\admision\services\ficheros;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Modules\admision\models\GrupoServicio;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
 use App\Modules\admision\models\TarifaServicio;
@@ -48,6 +49,22 @@ class TarifaServicioService
         $t = strtoupper(trim($x));
         if ($t === '' || $t === 'NULL') return null;
         return $t;
+    }
+
+    private function resolveGrupo(?string $codigo): array
+    {
+        if ($codigo === null || trim($codigo) === '') {
+            return ['grupo_codigo' => null, 'grupo_descripcion' => null, 'grupo_abrev' => null];
+        }
+        $g = GrupoServicio::activos()->where('codigo', trim($codigo))->first();
+        if (!$g) {
+            return ['grupo_codigo' => null, 'grupo_descripcion' => null, 'grupo_abrev' => null];
+        }
+        return [
+            'grupo_codigo' => $g->codigo,
+            'grupo_descripcion' => $g->descripcion,
+            'grupo_abrev' => $g->abrev,
+        ];
     }
 
     private function assertCategoriaSubActivas(Tarifa $tarifa, int $categoriaId, int $subcategoriaId): array
@@ -115,11 +132,15 @@ class TarifaServicioService
         $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
         $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
         $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : 0;
+        $grupoCodigo = isset($filters['grupo_codigo']) ? trim((string)$filters['grupo_codigo']) : null;
 
         $query = TarifaServicio::query()->where('tarifa_id', $tarifa->id);
 
         if ($categoriaId > 0) $query->where('categoria_id', $categoriaId);
         if ($subcategoriaId > 0) $query->where('subcategoria_id', $subcategoriaId);
+        if ($grupoCodigo !== null && $grupoCodigo !== '') {
+            $query->where('grupo_codigo', $grupoCodigo);
+        }
 
         if ($status && in_array($status, RecordStatus::values(), true)) {
             $query->where('estado', $status);
@@ -139,6 +160,7 @@ class TarifaServicioService
             'status' => $status,
             'categoria_id' => $categoriaId,
             'subcategoria_id' => $subcategoriaId,
+            'grupo_codigo' => $grupoCodigo,
         ]);
     }
 
@@ -170,6 +192,8 @@ class TarifaServicioService
                 }
             }
 
+            $grupo = $this->resolveGrupo($data['grupo_codigo'] ?? null);
+
             $srv = TarifaServicio::create([
                 'tarifa_id' => $tarifa->id,
                 'categoria_id' => $categoriaId,
@@ -182,6 +206,9 @@ class TarifaServicioService
                 'descripcion' => $data['descripcion'],
                 'precio_sin_igv' => $data['precio_sin_igv'],
                 'unidad' => $data['unidad'],
+                'grupo_codigo' => $grupo['grupo_codigo'],
+                'grupo_descripcion' => $grupo['grupo_descripcion'],
+                'grupo_abrev' => $grupo['grupo_abrev'],
                 'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
             ]);
 
@@ -216,7 +243,7 @@ class TarifaServicioService
         $this->assertBelongs($tarifa, $srv);
 
         return DB::transaction(function () use ($tarifa, $srv, $data) {
-            $before = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'estado']);
+            $before = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev', 'estado']);
 
             $nom = $this->normalizeNomenclador($data['nomenclador'] ?? null);
             if ($nom !== null) {
@@ -237,17 +264,22 @@ class TarifaServicioService
                 $this->assertCategoriaSubActivas($tarifa, (int)$srv->categoria_id, (int)$srv->subcategoria_id);
             }
 
+            $grupo = $this->resolveGrupo($data['grupo_codigo'] ?? null);
+
             $srv->fill([
                 'nomenclador' => $nom,
                 'descripcion' => $data['descripcion'],
                 'precio_sin_igv' => $data['precio_sin_igv'],
                 'unidad' => $data['unidad'],
+                'grupo_codigo' => $grupo['grupo_codigo'],
+                'grupo_descripcion' => $grupo['grupo_descripcion'],
+                'grupo_abrev' => $grupo['grupo_abrev'],
                 'estado' => $data['estado'],
             ]);
             $srv->save();
             $srv->refresh();
 
-            $after = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'estado']);
+            $after = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev', 'estado']);
 
             $this->audit->log(
                 'masterdata.admision.tarifario.servicios.update',

@@ -22,6 +22,18 @@ class TarifarioCatalogoController extends Controller
         return response()->json(['data' => $items]);
     }
 
+    /**
+     * Todas las tarifas activas incluyendo el base. Solo para Facturación → Tarifario.
+     */
+    public function tarifasParaGestionTarifario(Request $request)
+    {
+        $this->authorize('viewAny', Tarifa::class);
+
+        $items = $this->service->listTarifasParaGestionTarifario($request->only(['q']));
+
+        return response()->json(['data' => $items]);
+    }
+
     public function tarifaBase()
     {
         $this->authorize('viewAny', Tarifa::class);

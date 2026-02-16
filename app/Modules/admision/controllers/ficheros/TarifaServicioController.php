@@ -27,6 +27,9 @@ class TarifaServicioController extends Controller
             'descripcion' => (string)$s->descripcion,
             'precio_sin_igv' => $s->precio_sin_igv,
             'unidad' => $s->unidad,
+            'grupo_codigo' => $s->grupo_codigo,
+            'grupo_descripcion' => $s->grupo_descripcion,
+            'grupo_abrev' => $s->grupo_abrev,
             'estado' => (string)$s->estado,
             'created_at' => $s->created_at,
             'updated_at' => $s->updated_at,
@@ -38,7 +41,7 @@ class TarifaServicioController extends Controller
         $this->authorize('viewAny', [TarifaServicio::class, $tarifa]);
 
         $p = $this->service->paginate($tarifa, $request->only([
-            'q', 'status', 'categoria_id', 'subcategoria_id', 'per_page', 'page'
+            'q', 'status', 'categoria_id', 'subcategoria_id', 'grupo_codigo', 'per_page', 'page'
         ]));
 
         return response()->json([

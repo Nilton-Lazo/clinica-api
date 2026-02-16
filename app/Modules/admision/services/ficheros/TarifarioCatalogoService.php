@@ -15,6 +15,10 @@ use Illuminate\Support\Facades\Schema;
 
 class TarifarioCatalogoService
 {
+    /**
+     * Tarifas operativas (excluye el tarifario base).
+     * Usar en todo el sistema EXCEPTO Facturación → Tarifario.
+     */
     public function listTarifasOperativas(array $filters = []): Collection
     {
         $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
@@ -32,6 +36,31 @@ class TarifarioCatalogoService
         }
 
         return $query
+            ->orderByRaw('CAST(codigo AS INTEGER) ASC')
+            ->get();
+    }
+
+    /**
+     * Todas las tarifas activas INCLUYENDO el tarifario base.
+     * Solo para Facturación → Tarifario (gestión de catálogo).
+     */
+    public function listTarifasParaGestionTarifario(array $filters = []): Collection
+    {
+        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
+
+        $query = Tarifa::query()
+            ->select(['id', 'codigo', 'descripcion_tarifa', 'iafa_id', 'estado', 'tarifa_base'])
+            ->where('estado', RecordStatus::ACTIVO->value);
+
+        if ($q !== null && $q !== '') {
+            $query->where(function ($sub) use ($q) {
+                $sub->where('codigo', 'ilike', "%{$q}%")
+                    ->orWhere('descripcion_tarifa', 'ilike', "%{$q}%");
+            });
+        }
+
+        return $query
+            ->orderByRaw('tarifa_base DESC')
             ->orderByRaw('CAST(codigo AS INTEGER) ASC')
             ->get();
     }
@@ -122,7 +151,11 @@ class TarifarioCatalogoService
 
     public function paginateServicios(Tarifa $tarifa, array $filters): LengthAwarePaginator
     {
-        $this->assertTarifaOperativa($tarifa);
+        if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
+            throw ValidationException::withMessages([
+                'tarifa_id' => ['La tarifa debe estar ACTIVA.'],
+            ]);
+        }
 
         $perPage = (int)($filters['per_page'] ?? 50);
         $perPage = max(1, min(100, $perPage));
@@ -146,6 +179,9 @@ class TarifarioCatalogoService
                 'ts.descripcion',
                 'ts.precio_sin_igv',
                 'ts.unidad',
+                'ts.grupo_codigo',
+                'ts.grupo_descripcion',
+                'ts.grupo_abrev',
                 'ts.estado',
 
                 'tc.id AS categoria_id',
@@ -266,7 +302,7 @@ class TarifarioCatalogoService
             ->orderBy('categoria_id')
             ->orderBy('subcategoria_id')
             ->orderBy('servicio_codigo')
-            ->get(['id', 'categoria_id', 'subcategoria_id', 'servicio_codigo', 'codigo', 'nomenclador', 'descripcion', 'precio_sin_igv', 'unidad']);
+            ->get(['id', 'categoria_id', 'subcategoria_id', 'servicio_codigo', 'codigo', 'nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev']);
 
         $subsByCat = [];
         foreach ($subs as $s) {
@@ -306,6 +342,9 @@ class TarifarioCatalogoService
                         'descripcion' => (string)$sv->descripcion,
                         'precio_sin_igv' => (string)$sv->precio_sin_igv,
                         'unidad' => (string)$sv->unidad,
+                        'grupo_codigo' => $sv->grupo_codigo ?? null,
+                        'grupo_descripcion' => $sv->grupo_descripcion ?? null,
+                        'grupo_abrev' => $sv->grupo_abrev ?? null,
                     ];
                 }
 

@@ -20,6 +20,9 @@ class TarifaServicio extends Model
         'descripcion',
         'precio_sin_igv',
         'unidad',
+        'grupo_codigo',
+        'grupo_descripcion',
+        'grupo_abrev',
         'estado',
     ];
 

@@ -189,6 +189,9 @@ class TarifaClonacionService
                     's.descripcion',
                     's.precio_sin_igv',
                     's.unidad',
+                    's.grupo_codigo',
+                    's.grupo_descripcion',
+                    's.grupo_abrev',
                     's.estado',
                 ]);
 
@@ -235,6 +238,9 @@ class TarifaClonacionService
                     'descripcion' => (string)$sv->descripcion,
                     'precio_sin_igv' => $sv->precio_sin_igv,
                     'unidad' => $sv->unidad,
+                    'grupo_codigo' => $sv->grupo_codigo ?? null,
+                    'grupo_descripcion' => $sv->grupo_descripcion ?? null,
+                    'grupo_abrev' => $sv->grupo_abrev ?? null,
                     'estado' => (string)$sv->estado,
                     'created_at' => now(),
                     'updated_at' => now(),
