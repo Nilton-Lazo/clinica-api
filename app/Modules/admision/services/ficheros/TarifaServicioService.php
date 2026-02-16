@@ -15,7 +15,13 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaServicioService
 {
-    public function __construct(private AuditService $audit) {}
+    public ?PropagacionResultado $lastPropagationResult = null;
+
+    public function __construct(
+        private AuditService $audit,
+        private TarifaCategoriaService $categoriaService,
+        private TarifaSubcategoriaService $subcategoriaService
+    ) {}
 
     private function assertTarifaActiva(Tarifa $tarifa): void
     {
@@ -193,6 +199,7 @@ class TarifaServicioService
             }
 
             $grupo = $this->resolveGrupo($data['grupo_codigo'] ?? null);
+            $estado = $data['estado'] ?? RecordStatus::ACTIVO->value;
 
             $srv = TarifaServicio::create([
                 'tarifa_id' => $tarifa->id,
@@ -209,8 +216,27 @@ class TarifaServicioService
                 'grupo_codigo' => $grupo['grupo_codigo'],
                 'grupo_descripcion' => $grupo['grupo_descripcion'],
                 'grupo_abrev' => $grupo['grupo_abrev'],
-                'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
+                'estado' => $estado,
             ]);
+
+            $this->lastPropagationResult = null;
+            if ($tarifa->tarifa_base) {
+                $this->lastPropagationResult = $this->propagarServicioAOtrasTarifas(
+                    (string)$cat->codigo,
+                    (string)$cat->nombre,
+                    (string)$sub->codigo,
+                    (string)$sub->nombre,
+                    $next['servicio_codigo'],
+                    $next['codigo'],
+                    $data['descripcion'],
+                    $data['precio_sin_igv'],
+                    $data['unidad'],
+                    $grupo,
+                    $nom,
+                    $estado,
+                    (int)$tarifa->id
+                );
+            }
 
             $this->audit->log(
                 'masterdata.admision.tarifario.servicios.create',
@@ -235,6 +261,165 @@ class TarifaServicioService
 
             return $srv;
         });
+    }
+
+    private function propagarServicioAOtrasTarifas(
+        string $catCodigo,
+        string $catNombre,
+        string $subCodigo,
+        string $subNombre,
+        string $servicioCodigo,
+        string $codigoFull,
+        string $descripcion,
+        float $precioSinIgv,
+        float $unidad,
+        array $grupo,
+        ?string $nomenclador,
+        string $estado,
+        int $tarifaBaseId
+    ): PropagacionResultado {
+        $result = new PropagacionResultado();
+
+        $otrasTarifas = Tarifa::query()
+            ->where('tarifa_base', false)
+            ->where('estado', RecordStatus::ACTIVO->value)
+            ->where('id', '<>', $tarifaBaseId)
+            ->get(['id', 'codigo', 'descripcion_tarifa']);
+
+        if ($otrasTarifas->isEmpty()) {
+            return $result;
+        }
+
+        foreach ($otrasTarifas as $t) {
+            $targetTarifa = Tarifa::query()->find($t->id);
+            if (!$targetTarifa) {
+                continue;
+            }
+
+            $cat = TarifaCategoria::query()
+                ->where('tarifa_id', $t->id)
+                ->where('nombre', $catNombre)
+                ->first();
+
+            if (!$cat) {
+                $codigoCatOcupado = TarifaCategoria::query()
+                    ->where('tarifa_id', $t->id)
+                    ->where('codigo', $catCodigo)
+                    ->exists();
+
+                $codigoCatUsar = $codigoCatOcupado
+                    ? $this->categoriaService->peekNextCodigo($targetTarifa)
+                    : $catCodigo;
+
+                $cat = TarifaCategoria::create([
+                    'tarifa_id' => $t->id,
+                    'codigo' => $codigoCatUsar,
+                    'nombre' => $catNombre,
+                    'estado' => $estado,
+                ]);
+            }
+
+            $sub = TarifaSubcategoria::query()
+                ->where('tarifa_id', $t->id)
+                ->where('categoria_id', $cat->id)
+                ->where('nombre', $subNombre)
+                ->first();
+
+            if (!$sub) {
+                $codigoSubOcupado = TarifaSubcategoria::query()
+                    ->where('tarifa_id', $t->id)
+                    ->where('categoria_id', $cat->id)
+                    ->where('codigo', $subCodigo)
+                    ->exists();
+
+                $codigoSubUsar = $codigoSubOcupado
+                    ? $this->subcategoriaService->peekNextCodigo($targetTarifa, (int)$cat->id)
+                    : $subCodigo;
+
+                $sub = TarifaSubcategoria::create([
+                    'tarifa_id' => $t->id,
+                    'categoria_id' => $cat->id,
+                    'codigo' => $codigoSubUsar,
+                    'nombre' => $subNombre,
+                    'estado' => $estado,
+                ]);
+            }
+
+            $existeMismo = TarifaServicio::query()
+                ->where('tarifa_id', $t->id)
+                ->where('codigo', $codigoFull)
+                ->where('descripcion', $descripcion)
+                ->exists();
+
+            if ($existeMismo) {
+                $result->omitidos[] = [
+                    'tipo' => 'servicio',
+                    'tarifa_id' => (int)$t->id,
+                    'tarifa_codigo' => (string)$t->codigo,
+                    'tarifa_descripcion' => (string)$t->descripcion_tarifa,
+                    'mensaje' => "El servicio '{$descripcion}' (código {$codigoFull}) ya existe.",
+                ];
+                continue;
+            }
+
+            $codigoOcupado = TarifaServicio::query()
+                ->where('tarifa_id', $t->id)
+                ->where('codigo', $codigoFull)
+                ->exists();
+
+            $next = $codigoOcupado
+                ? $this->peekNextCodigo($targetTarifa, (int)$cat->id, (int)$sub->id)
+                : [
+                    'servicio_codigo' => explode('.', $codigoFull)[2] ?? $codigoFull,
+                    'codigo' => $codigoFull,
+                ];
+
+            $item = [
+                'tipo' => 'servicio',
+                'tarifa_id' => (int)$t->id,
+                'tarifa_codigo' => (string)$t->codigo,
+                'tarifa_descripcion' => (string)$t->descripcion_tarifa,
+                'mensaje' => $next['codigo'] !== $codigoFull
+                    ? "Servicio '{$descripcion}': código {$codigoFull} ocupado; creado con {$next['codigo']}."
+                    : "Servicio creado con código {$next['codigo']}.",
+                'codigo_base' => $codigoFull,
+                'codigo_usado' => $next['codigo'],
+            ];
+            if ($next['codigo'] !== $codigoFull) {
+                $result->creadosConCodigoDiferente[] = $item;
+            } else {
+                $result->creados[] = $item;
+            }
+
+            $nom = $nomenclador;
+            if ($nom !== null && trim($nom) !== '') {
+                $conflicto = TarifaServicio::query()
+                    ->where('tarifa_id', $t->id)
+                    ->where('nomenclador', $nom)
+                    ->exists();
+                if ($conflicto) {
+                    $nom = null;
+                }
+            }
+
+            TarifaServicio::create([
+                'tarifa_id' => $t->id,
+                'categoria_id' => $cat->id,
+                'subcategoria_id' => $sub->id,
+                'servicio_codigo' => $next['servicio_codigo'],
+                'codigo' => $next['codigo'],
+                'nomenclador' => $nom,
+                'descripcion' => $descripcion,
+                'precio_sin_igv' => $precioSinIgv,
+                'unidad' => $unidad,
+                'grupo_codigo' => $grupo['grupo_codigo'],
+                'grupo_descripcion' => $grupo['grupo_descripcion'],
+                'grupo_abrev' => $grupo['grupo_abrev'],
+                'estado' => $estado,
+            ]);
+        }
+
+        return $result;
     }
 
     public function update(Tarifa $tarifa, TarifaServicio $srv, array $data): TarifaServicio

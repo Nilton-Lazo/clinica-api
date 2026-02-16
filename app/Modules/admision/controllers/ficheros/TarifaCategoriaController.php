@@ -72,7 +72,12 @@ class TarifaCategoriaController extends Controller
 
         $created = $this->service->create($tarifa, $request->validated());
 
-        return response()->json(['data' => $this->present($created)], 201);
+        $payload = ['data' => $this->present($created)];
+        if ($this->service->lastPropagationResult !== null) {
+            $payload['propagacion'] = $this->service->lastPropagationResult->toArray();
+        }
+
+        return response()->json($payload, 201);
     }
 
     public function update(Tarifa $tarifa, TarifaCategoriaUpdateRequest $request, TarifaCategoria $categoria)

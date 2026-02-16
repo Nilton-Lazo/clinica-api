@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaCategoriaService
 {
+    public ?PropagacionResultado $lastPropagationResult = null;
+
     public function __construct(private AuditService $audit) {}
 
     private function assertTarifaActiva(Tarifa $tarifa): void
@@ -100,17 +102,39 @@ class TarifaCategoriaService
     {
         $this->assertTarifaActiva($tarifa);
 
+        $nombre = trim((string)($data['descripcion'] ?? ''));
+        if ($nombre === '') {
+            throw ValidationException::withMessages(['descripcion' => ['La descripción es requerida.']]);
+        }
+
+        $existeMismoNombre = TarifaCategoria::query()
+            ->where('tarifa_id', $tarifa->id)
+            ->where('nombre', $nombre)
+            ->exists();
+
+        if ($existeMismoNombre) {
+            throw ValidationException::withMessages([
+                'descripcion' => ["Ya existe una categoría con la descripción '{$nombre}' en este tarifario."],
+            ]);
+        }
+
         return DB::transaction(function () use ($tarifa, $data) {
             DB::statement('LOCK TABLE tarifa_categorias IN EXCLUSIVE MODE');
 
             $codigo = $this->peekNextCodigo($tarifa);
+            $estado = $data['estado'] ?? RecordStatus::ACTIVO->value;
 
             $categoria = TarifaCategoria::create([
                 'tarifa_id' => $tarifa->id,
                 'codigo' => $codigo,
                 'nombre' => $data['descripcion'],
-                'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
+                'estado' => $estado,
             ]);
+
+            $this->lastPropagationResult = null;
+            if ($tarifa->tarifa_base) {
+                $this->lastPropagationResult = $this->propagarCategoriaAOtrasTarifas($codigo, $data['descripcion'], $estado, (int)$tarifa->id);
+            }
 
             $this->audit->log(
                 'masterdata.admision.tarifario.categorias.create',
@@ -129,6 +153,92 @@ class TarifaCategoriaService
 
             return $categoria;
         });
+    }
+
+    private function propagarCategoriaAOtrasTarifas(string $codigo, string $nombre, string $estado, int $tarifaBaseId): PropagacionResultado
+    {
+        $result = new PropagacionResultado();
+
+        $otrasTarifas = Tarifa::query()
+            ->where('tarifa_base', false)
+            ->where('estado', RecordStatus::ACTIVO->value)
+            ->where('id', '<>', $tarifaBaseId)
+            ->get(['id', 'codigo', 'descripcion_tarifa']);
+
+        if ($otrasTarifas->isEmpty()) {
+            return $result;
+        }
+
+        $now = now();
+        $rows = [];
+
+        foreach ($otrasTarifas as $t) {
+            $targetTarifa = Tarifa::query()->find($t->id);
+            if (!$targetTarifa) {
+                continue;
+            }
+
+            $existeMisma = TarifaCategoria::query()
+                ->where('tarifa_id', $t->id)
+                ->where('codigo', $codigo)
+                ->where('nombre', $nombre)
+                ->exists();
+
+            if ($existeMisma) {
+                $result->omitidos[] = [
+                    'tipo' => 'categoria',
+                    'tarifa_id' => (int)$t->id,
+                    'tarifa_codigo' => (string)$t->codigo,
+                    'tarifa_descripcion' => (string)$t->descripcion_tarifa,
+                    'mensaje' => "La categoría '{$nombre}' (código {$codigo}) ya existe en este tarifario.",
+                ];
+                continue;
+            }
+
+            $codigoOcupado = TarifaCategoria::query()
+                ->where('tarifa_id', $t->id)
+                ->where('codigo', $codigo)
+                ->exists();
+
+            $codigoUsar = $codigoOcupado ? $this->peekNextCodigo($targetTarifa) : $codigo;
+
+            $rows[] = [
+                'tarifa_id' => (int)$t->id,
+                'codigo' => $codigoUsar,
+                'nombre' => $nombre,
+                'estado' => $estado,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if ($codigoUsar !== $codigo) {
+                $result->creadosConCodigoDiferente[] = [
+                    'tipo' => 'categoria',
+                    'tarifa_id' => (int)$t->id,
+                    'tarifa_codigo' => (string)$t->codigo,
+                    'tarifa_descripcion' => (string)$t->descripcion_tarifa,
+                    'mensaje' => "Categoría '{$nombre}': código {$codigo} ya ocupado; creada con código {$codigoUsar}.",
+                    'codigo_base' => $codigo,
+                    'codigo_usado' => $codigoUsar,
+                ];
+            } else {
+                $result->creados[] = [
+                    'tipo' => 'categoria',
+                    'tarifa_id' => (int)$t->id,
+                    'tarifa_codigo' => (string)$t->codigo,
+                    'tarifa_descripcion' => (string)$t->descripcion_tarifa,
+                    'mensaje' => "Categoría creada con código {$codigo}.",
+                    'codigo_base' => $codigo,
+                    'codigo_usado' => $codigo,
+                ];
+            }
+        }
+
+        if (!empty($rows)) {
+            DB::table('tarifa_categorias')->insert($rows);
+        }
+
+        return $result;
     }
 
     public function update(Tarifa $tarifa, TarifaCategoria $categoria, array $data): TarifaCategoria
