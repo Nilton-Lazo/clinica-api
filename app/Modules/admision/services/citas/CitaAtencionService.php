@@ -73,11 +73,21 @@ class CitaAtencionService
         if ($atencion) {
             $servicios = CitaAtencionServicio::query()
                 ->where('cita_atencion_id', $atencion->id)
-                ->with(['tarifaServicio:id,codigo,descripcion,precio_sin_igv', 'medico:id,codigo,nombres,apellido_paterno,apellido_materno', 'user:id,name,username'])
+                ->with(['tarifaServicio:id,codigo,descripcion,precio_sin_igv', 'medico:id,codigo,nombres,apellido_paterno,apellido_materno', 'user:id,name,username,nombres,apellido_paterno,apellido_materno'])
                 ->get();
             foreach ($servicios as $s) {
                 $ts = $s->tarifaServicio;
                 $med = $s->medico;
+                $user = $s->user;
+                $userNombreCompleto = null;
+                if ($user) {
+                    $userNombreCompleto = $user->name && trim((string)$user->name) !== ''
+                        ? trim((string)$user->name)
+                        : trim(($user->apellido_paterno ?? '') . ' ' . ($user->apellido_materno ?? '') . ' ' . ($user->nombres ?? ''));
+                    if ($userNombreCompleto === '') {
+                        $userNombreCompleto = (string)$user->username;
+                    }
+                }
                 $serviciosPayload[] = [
                     'id' => (int)$s->id,
                     'tarifa_servicio_id' => (int)$s->tarifa_servicio_id,
@@ -87,7 +97,8 @@ class CitaAtencionService
                     'medico_codigo' => $med ? (string)$med->codigo : null,
                     'medico_nombre' => $med ? trim($med->apellido_paterno . ' ' . $med->apellido_materno . ' ' . $med->nombres) : null,
                     'user_id' => $s->user_id ? (int)$s->user_id : null,
-                    'user_nombre' => $s->user ? (string)$s->user->username : null,
+                    'user_username' => $user ? (string)$user->username : null,
+                    'user_nombre' => $userNombreCompleto,
                     'cop_var' => (float)$s->cop_var,
                     'cop_fijo' => (float)$s->cop_fijo,
                     'descuento_pct' => (float)$s->descuento_pct,

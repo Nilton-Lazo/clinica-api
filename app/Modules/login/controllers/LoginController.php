@@ -44,6 +44,7 @@ class LoginController extends Controller
             ->json([
                 'id' => $user->id,
                 'username' => $user->username,
+                'name' => $user->name,
                 'nombres' => $user->nombres,
                 'apellido_paterno' => $user->apellido_paterno,
                 'apellido_materno' => $user->apellido_materno,
