@@ -32,7 +32,7 @@ class CitaAtencionService
                     $q->select('id', 'tipo_documento', 'numero_documento', 'nr', 'nombres', 'apellido_paterno', 'apellido_materno', 'sexo', 'fecha_nacimiento', 'edad', 'parentesco_seguro', 'titular_nombre', 'celular', 'telefono', 'email')
                       ->with(['planes' => function ($q2) {
                           $q2->where('estado', RecordStatus::ACTIVO->value)
-                             ->with(['tipoCliente:id,codigo,descripcion_tipo_cliente,tarifa_id', 'tipoCliente.tarifa:id,codigo,descripcion_tarifa']);
+                             ->with(['tipoCliente:id,codigo,descripcion_tipo_cliente,tarifa_id,iafa_id', 'tipoCliente.tarifa:id,codigo,descripcion_tarifa']);
                       }]);
                 },
                 'iafa:id,codigo,descripcion_corta,razon_social',
@@ -58,6 +58,7 @@ class CitaAtencionService
             return [
                 'id' => (int)$plan->id,
                 'tipo_cliente_id' => (int)$plan->tipo_cliente_id,
+                'iafa_id' => $tc && $tc->iafa_id ? (int)$tc->iafa_id : null,
                 'descripcion' => $tc ? ($tc->codigo . '/' . ($tc->descripcion_tipo_cliente ?? '')) : '',
                 'tarifa_id' => $tarifa ? (int)$tarifa->id : null,
                 'tarifa_codigo' => $tarifa ? (string)$tarifa->codigo : null,
@@ -73,7 +74,7 @@ class CitaAtencionService
         if ($atencion) {
             $servicios = CitaAtencionServicio::query()
                 ->where('cita_atencion_id', $atencion->id)
-                ->with(['tarifaServicio:id,codigo,descripcion,precio_sin_igv', 'medico:id,codigo,nombres,apellido_paterno,apellido_materno', 'user:id,name,username,nombres,apellido_paterno,apellido_materno'])
+                ->with(['tarifaServicio:id,codigo,descripcion,precio_sin_igv,desea_liberar_precio', 'medico:id,codigo,nombres,apellido_paterno,apellido_materno', 'user:id,name,username,nombres,apellido_paterno,apellido_materno'])
                 ->get();
             foreach ($servicios as $s) {
                 $ts = $s->tarifaServicio;
@@ -93,6 +94,7 @@ class CitaAtencionService
                     'tarifa_servicio_id' => (int)$s->tarifa_servicio_id,
                     'servicio_codigo' => $ts ? (string)$ts->codigo : null,
                     'servicio_descripcion' => $ts ? (string)$ts->descripcion : null,
+                    'desea_liberar_precio' => $ts ? (bool)$ts->desea_liberar_precio : false,
                     'medico_id' => (int)$s->medico_id,
                     'medico_codigo' => $med ? (string)$med->codigo : null,
                     'medico_nombre' => $med ? trim($med->apellido_paterno . ' ' . $med->apellido_materno . ' ' . $med->nombres) : null,
@@ -127,6 +129,7 @@ class CitaAtencionService
                 'autorizacion_siteds' => $cita->autorizacion_siteds ? (string)$cita->autorizacion_siteds : null,
                 'cuenta' => $cita->cuenta ? (string)$cita->cuenta : null,
                 'estado_atencion' => (string)$cita->estado_atencion,
+                'iafa_id' => $cita->iafa_id ? (int)$cita->iafa_id : null,
             ],
             'programacion' => $programacion ? [
                 'id' => (int)$programacion->id,

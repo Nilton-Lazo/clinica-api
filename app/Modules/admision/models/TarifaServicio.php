@@ -23,12 +23,14 @@ class TarifaServicio extends Model
         'grupo_codigo',
         'grupo_descripcion',
         'grupo_abrev',
+        'desea_liberar_precio',
         'estado',
     ];
 
     protected $casts = [
         'precio_sin_igv' => 'decimal:4',
         'unidad' => 'decimal:4',
+        'desea_liberar_precio' => 'boolean',
     ];
 
     public function tarifa()

@@ -182,6 +182,7 @@ class TarifarioCatalogoService
                 'ts.grupo_codigo',
                 'ts.grupo_descripcion',
                 'ts.grupo_abrev',
+                'ts.desea_liberar_precio',
                 'ts.estado',
 
                 'tc.id AS categoria_id',

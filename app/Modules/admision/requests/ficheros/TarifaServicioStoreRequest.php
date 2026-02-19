@@ -20,8 +20,10 @@ class TarifaServicioStoreRequest extends FormRequest
             'nomenclador' => ['nullable', 'string', 'max:50'],
 
             'precio_sin_igv' => ['required', 'numeric', 'min:0'],
-            'unidad' => ['required', 'numeric', 'min:0.001'],
+            'unidad' => ['required', 'numeric', 'min:0'],
             'grupo_codigo' => ['nullable', 'string', 'max:20'],
+
+            'desea_liberar_precio' => ['sometimes', 'boolean'],
 
             'estado' => ['sometimes', 'string', Rule::in(RecordStatus::values())],
         ];

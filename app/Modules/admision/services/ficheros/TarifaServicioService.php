@@ -200,6 +200,7 @@ class TarifaServicioService
 
             $grupo = $this->resolveGrupo($data['grupo_codigo'] ?? null);
             $estado = $data['estado'] ?? RecordStatus::ACTIVO->value;
+            $deseaLiberarPrecio = (bool)($data['desea_liberar_precio'] ?? false);
 
             $srv = TarifaServicio::create([
                 'tarifa_id' => $tarifa->id,
@@ -216,6 +217,7 @@ class TarifaServicioService
                 'grupo_codigo' => $grupo['grupo_codigo'],
                 'grupo_descripcion' => $grupo['grupo_descripcion'],
                 'grupo_abrev' => $grupo['grupo_abrev'],
+                'desea_liberar_precio' => $deseaLiberarPrecio,
                 'estado' => $estado,
             ]);
 
@@ -234,6 +236,7 @@ class TarifaServicioService
                     $grupo,
                     $nom,
                     $estado,
+                    $deseaLiberarPrecio,
                     (int)$tarifa->id
                 );
             }
@@ -276,6 +279,7 @@ class TarifaServicioService
         array $grupo,
         ?string $nomenclador,
         string $estado,
+        bool $deseaLiberarPrecio,
         int $tarifaBaseId
     ): PropagacionResultado {
         $result = new PropagacionResultado();
@@ -415,6 +419,7 @@ class TarifaServicioService
                 'grupo_codigo' => $grupo['grupo_codigo'],
                 'grupo_descripcion' => $grupo['grupo_descripcion'],
                 'grupo_abrev' => $grupo['grupo_abrev'],
+                'desea_liberar_precio' => $deseaLiberarPrecio,
                 'estado' => $estado,
             ]);
         }
@@ -428,7 +433,7 @@ class TarifaServicioService
         $this->assertBelongs($tarifa, $srv);
 
         return DB::transaction(function () use ($tarifa, $srv, $data) {
-            $before = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev', 'estado']);
+            $before = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev', 'desea_liberar_precio', 'estado']);
 
             $nom = $this->normalizeNomenclador($data['nomenclador'] ?? null);
             if ($nom !== null) {
@@ -451,6 +456,10 @@ class TarifaServicioService
 
             $grupo = $this->resolveGrupo($data['grupo_codigo'] ?? null);
 
+            $deseaLiberarPrecio = array_key_exists('desea_liberar_precio', $data)
+                ? (bool)$data['desea_liberar_precio']
+                : $srv->desea_liberar_precio;
+
             $srv->fill([
                 'nomenclador' => $nom,
                 'descripcion' => $data['descripcion'],
@@ -459,12 +468,13 @@ class TarifaServicioService
                 'grupo_codigo' => $grupo['grupo_codigo'],
                 'grupo_descripcion' => $grupo['grupo_descripcion'],
                 'grupo_abrev' => $grupo['grupo_abrev'],
+                'desea_liberar_precio' => $deseaLiberarPrecio,
                 'estado' => $data['estado'],
             ]);
             $srv->save();
             $srv->refresh();
 
-            $after = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev', 'estado']);
+            $after = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev', 'desea_liberar_precio', 'estado']);
 
             $this->audit->log(
                 'masterdata.admision.tarifario.servicios.update',

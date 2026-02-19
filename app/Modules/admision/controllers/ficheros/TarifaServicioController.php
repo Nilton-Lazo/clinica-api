@@ -30,6 +30,7 @@ class TarifaServicioController extends Controller
             'grupo_codigo' => $s->grupo_codigo,
             'grupo_descripcion' => $s->grupo_descripcion,
             'grupo_abrev' => $s->grupo_abrev,
+            'desea_liberar_precio' => (bool)$s->desea_liberar_precio,
             'estado' => (string)$s->estado,
             'created_at' => $s->created_at,
             'updated_at' => $s->updated_at,
