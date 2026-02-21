@@ -32,7 +32,7 @@ class CitaAtencionService
                     $q->select('id', 'tipo_documento', 'numero_documento', 'nr', 'nombres', 'apellido_paterno', 'apellido_materno', 'sexo', 'fecha_nacimiento', 'edad', 'parentesco_seguro', 'titular_nombre', 'celular', 'telefono', 'email')
                       ->with(['planes' => function ($q2) {
                           $q2->where('estado', RecordStatus::ACTIVO->value)
-                             ->with(['tipoCliente:id,codigo,descripcion_tipo_cliente,tarifa_id,iafa_id', 'tipoCliente.tarifa:id,codigo,descripcion_tarifa']);
+                             ->with(['tipoCliente:id,codigo,descripcion_tipo_cliente,tarifa_id,iafa_id', 'tipoCliente.tarifa:id,codigo,descripcion_tarifa,es_precio_directo']);
                       }]);
                 },
                 'iafa:id,codigo,descripcion_corta,razon_social',
@@ -63,6 +63,7 @@ class CitaAtencionService
                 'tarifa_id' => $tarifa ? (int)$tarifa->id : null,
                 'tarifa_codigo' => $tarifa ? (string)$tarifa->codigo : null,
                 'tarifa_descripcion' => $tarifa ? (string)($tarifa->descripcion_tarifa ?? $tarifa->codigo ?? '') : null,
+                'tarifa_es_precio_directo' => $tarifa ? (bool)$tarifa->es_precio_directo : false,
             ];
         })->values()->all();
 
@@ -74,7 +75,7 @@ class CitaAtencionService
         if ($atencion) {
             $servicios = CitaAtencionServicio::query()
                 ->where('cita_atencion_id', $atencion->id)
-                ->with(['tarifaServicio:id,codigo,descripcion,precio_sin_igv,desea_liberar_precio', 'medico:id,codigo,nombres,apellido_paterno,apellido_materno', 'user:id,name,username,nombres,apellido_paterno,apellido_materno'])
+                ->with(['tarifaServicio:id,codigo,descripcion,precio_sin_igv,desea_liberar_precio,categoria_id', 'tarifaServicio.categoria:id,codigo', 'medico:id,codigo,nombres,apellido_paterno,apellido_materno', 'user:id,name,username,nombres,apellido_paterno,apellido_materno'])
                 ->get();
             foreach ($servicios as $s) {
                 $ts = $s->tarifaServicio;
@@ -89,11 +90,13 @@ class CitaAtencionService
                         $userNombreCompleto = (string)$user->username;
                     }
                 }
+                $categoriaCodigo = $ts && $ts->relationLoaded('categoria') && $ts->categoria ? (string)$ts->categoria->codigo : null;
                 $serviciosPayload[] = [
                     'id' => (int)$s->id,
                     'tarifa_servicio_id' => (int)$s->tarifa_servicio_id,
                     'servicio_codigo' => $ts ? (string)$ts->codigo : null,
                     'servicio_descripcion' => $ts ? (string)$ts->descripcion : null,
+                    'categoria_codigo' => $categoriaCodigo,
                     'desea_liberar_precio' => $ts ? (bool)$ts->desea_liberar_precio : false,
                     'medico_id' => (int)$s->medico_id,
                     'medico_codigo' => $med ? (string)$med->codigo : null,

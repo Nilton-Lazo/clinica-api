@@ -15,6 +15,7 @@ class Tarifa extends Model
         'requiere_acreditacion',
         'tarifa_base',
         'descripcion_tarifa',
+        'es_precio_directo',
         'iafa_id',
         'factor_clinica',
         'factor_laboratorio',
@@ -43,6 +44,7 @@ class Tarifa extends Model
     protected $casts = [
         'requiere_acreditacion' => 'boolean',
         'tarifa_base' => 'boolean',
+        'es_precio_directo' => 'boolean',
         'fecha_creacion' => 'date:Y-m-d',
         'factor_clinica' => 'decimal:2',
         'factor_laboratorio' => 'decimal:2',

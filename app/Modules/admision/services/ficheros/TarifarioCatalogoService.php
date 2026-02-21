@@ -16,6 +16,32 @@ use Illuminate\Support\Facades\Schema;
 class TarifarioCatalogoService
 {
     /**
+     * Mapeo grupo_codigo (grupos_servicio) -> atributo factor en Tarifa.
+     * Si el servicio no tiene grupo o el grupo no está aquí, se usa factor_otros_servicios.
+     */
+    private const GRUPO_TO_FACTOR = [
+        '704101' => 'factor_clinica',
+        '704102' => 'factor_laboratorio',
+        '704103' => 'factor_ecografia',
+        '704104' => 'factor_procedimientos',
+        '704105' => 'factor_rayos_x',
+        '704106' => 'factor_tomografia',
+        '704107' => 'factor_patologia',
+        '704108' => 'factor_medicina_fisica',
+        '704109' => 'factor_resonancia',
+        '704110' => 'factor_honorarios_medicos',
+        '704111' => 'factor_medicinas',
+        '704112' => 'factor_equipos_oxigeno',
+        '704113' => 'factor_banco_sangre',
+        '704114' => 'factor_mamografia',
+        '704115' => 'factor_densitometria',
+        '704116' => 'factor_psicoprofilaxis',
+        '704117' => 'factor_medicamentos_comerciales',
+        '704118' => 'factor_medicamentos_genericos',
+        '704119' => 'factor_material_medico',
+    ];
+
+    /**
      * Tarifas operativas (excluye el tarifario base).
      * Usar en todo el sistema EXCEPTO Facturación → Tarifario.
      */
@@ -149,6 +175,20 @@ class TarifarioCatalogoService
         return $refMinutos >= $desdeMinutos || $refMinutos < $hastaMinutos;
     }
 
+    /**
+     * Obtiene el factor de la tarifa para el grupo del servicio.
+     * Si no hay grupo o no está mapeado, usa factor_otros_servicios.
+     */
+    private function getFactorForGrupo(Tarifa $tarifa, ?string $grupoCodigo): float
+    {
+        $key = $grupoCodigo !== null && $grupoCodigo !== '' ? trim($grupoCodigo) : null;
+        $factorAttr = $key !== null && isset(self::GRUPO_TO_FACTOR[$key])
+            ? self::GRUPO_TO_FACTOR[$key]
+            : 'factor_otros_servicios';
+        $value = $tarifa->getAttribute($factorAttr);
+        return is_numeric($value) ? (float)$value : (float)($tarifa->factor_otros_servicios ?? 1);
+    }
+
     public function paginateServicios(Tarifa $tarifa, array $filters): LengthAwarePaginator
     {
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
@@ -263,12 +303,21 @@ class TarifarioCatalogoService
             }
         }
 
-        $items = collect($paginator->items())->map(function ($row) use ($reglasPorCategoria) {
+        $esPrecioDirecto = (bool)$tarifa->es_precio_directo;
+
+        $items = collect($paginator->items())->map(function ($row) use ($reglasPorCategoria, $tarifa, $esPrecioDirecto) {
             $arr = (array)$row;
             $catId = (int)($arr['categoria_id'] ?? 0);
             $activo = isset($reglasPorCategoria[$catId]);
             $arr['recargo_noche_activo'] = $activo;
             $arr['recargo_noche_porcentaje'] = $activo ? $reglasPorCategoria[$catId] : 0;
+
+            if (!$esPrecioDirecto) {
+                $unidad = (float)($arr['unidad'] ?? 0);
+                $factor = $this->getFactorForGrupo($tarifa, isset($arr['grupo_codigo']) ? (string)$arr['grupo_codigo'] : null);
+                $arr['precio_sin_igv'] = (string)round($unidad * $factor, 3);
+            }
+
             return (object)$arr;
         });
 

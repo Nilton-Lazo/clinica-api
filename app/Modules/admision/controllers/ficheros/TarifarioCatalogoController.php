@@ -83,6 +83,7 @@ class TarifarioCatalogoController extends Controller
                 'per_page' => $p->perPage(),
                 'total' => $p->total(),
                 'last_page' => $p->lastPage(),
+                'tarifa_es_precio_directo' => (bool)$tarifa->es_precio_directo,
             ],
         ]);
     }
