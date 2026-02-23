@@ -22,8 +22,8 @@ class EnsureTokenIsFresh
 
         $now = Carbon::now();
 
-        $idleMinutes = (int) env('SESSION_IDLE_MINUTES', 15);
-        $maxHours = (int) env('SESSION_MAX_HOURS', 8);
+        $idleMinutes = config('session_limits.idle_minutes', 15);
+        $maxHours = config('session_limits.max_hours', 8);
 
         $tokenKey = 'session:last_activity:' . $token->id;
 

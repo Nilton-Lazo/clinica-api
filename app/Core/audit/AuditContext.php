@@ -7,10 +7,10 @@ use Illuminate\Support\Str;
 
 class AuditContext
 {
-    protected Request $request;
+    protected ?Request $request;
     protected string $requestId;
 
-    public function __construct(Request $request)
+    public function __construct(?Request $request = null)
     {
         $this->request = $request;
         $this->requestId = (string) Str::uuid();
@@ -23,8 +23,11 @@ class AuditContext
 
     public function actor(): ?array
     {
-        $user = $this->request->user();
+        if ($this->request === null) {
+            return null;
+        }
 
+        $user = $this->request->user();
         if (!$user) {
             return null;
         }
@@ -39,8 +42,11 @@ class AuditContext
 
     public function module(): string
     {
-        $route = $this->request->route()?->getActionName();
+        if ($this->request === null) {
+            return 'console';
+        }
 
+        $route = $this->request->route()?->getActionName();
         if (!$route) {
             return 'unknown';
         }
@@ -52,21 +58,21 @@ class AuditContext
 
     public function route(): string
     {
-        return $this->request->path();
+        return $this->request !== null ? $this->request->path() : '';
     }
 
     public function method(): string
     {
-        return $this->request->method();
+        return $this->request !== null ? $this->request->method() : 'CLI';
     }
 
     public function ip(): ?string
     {
-        return $this->request->ip();
+        return $this->request?->ip();
     }
 
     public function userAgent(): ?string
     {
-        return $this->request->userAgent();
+        return $this->request?->userAgent();
     }
 }

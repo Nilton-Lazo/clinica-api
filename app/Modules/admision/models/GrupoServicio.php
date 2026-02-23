@@ -2,9 +2,9 @@
 
 namespace App\Modules\admision\models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Core\audit\AuditableModel;
 
-class GrupoServicio extends Model
+class GrupoServicio extends AuditableModel
 {
     protected $table = 'grupos_servicio';
 

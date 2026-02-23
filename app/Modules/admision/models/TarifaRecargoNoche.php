@@ -3,9 +3,9 @@
 namespace App\Modules\admision\models;
 
 use App\Core\support\RecordStatus;
-use Illuminate\Database\Eloquent\Model;
+use App\Core\audit\AuditableModel;
 
-class TarifaRecargoNoche extends Model
+class TarifaRecargoNoche extends AuditableModel
 {
     protected $table = 'tarifa_recargo_noche';
 

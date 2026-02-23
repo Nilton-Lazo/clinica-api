@@ -4,9 +4,9 @@ namespace App\Modules\admision\models;
 
 use App\Core\support\RecordStatus;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
+use App\Core\audit\AuditableModel;
 
-class TipoCliente extends Model
+class TipoCliente extends AuditableModel
 {
     protected $table = 'tipos_clientes';
 

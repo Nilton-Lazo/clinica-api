@@ -2,9 +2,9 @@
 
 namespace App\Modules\admision\models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Core\audit\AuditableModel;
 
-class CitaAtencionServicio extends Model
+class CitaAtencionServicio extends AuditableModel
 {
     protected $table = 'cita_atencion_servicios';
 

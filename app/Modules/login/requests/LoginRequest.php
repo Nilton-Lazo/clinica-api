@@ -11,11 +11,18 @@ class LoginRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('identifier') && is_string($this->identifier)) {
+            $this->merge(['identifier' => trim($this->identifier)]);
+        }
+    }
+
     public function rules(): array
     {
         return [
-            'identifier' => ['required', 'string'],
-            'password'   => ['required', 'string'],
+            'identifier' => ['required', 'string', 'max:255'],
+            'password'   => ['required', 'string', 'max:255'],
         ];
     }
 }

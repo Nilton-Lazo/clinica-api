@@ -2,12 +2,12 @@
 
 namespace App\Modules\admision\models;
 
+use App\Core\audit\AuditableModel;
 use App\Core\support\RecordStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 
-class Especialidad extends Model
+class Especialidad extends AuditableModel
 {
     protected $table = 'especialidades';
 

@@ -2,12 +2,12 @@
 
 namespace App\Modules\admision\models;
 
+use App\Core\audit\AuditableModel;
 use App\Core\support\RecordStatus;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Medico extends Model
+class Medico extends AuditableModel
 {
     protected $table = 'medicos';
 

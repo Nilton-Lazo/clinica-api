@@ -11,13 +11,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(AuditContext::class, function ($app) {
-            return new AuditContext($app['request']);
+        $this->app->singleton(\App\Core\audit\AuditContext::class, function ($app) {
+            return new \App\Core\audit\AuditContext($app->has('request') ? $app['request'] : null);
         });
     
-        $this->app->singleton(AuditService::class, function ($app) {
-            return new AuditService(
-                $app->make(AuditContext::class)
+        $this->app->singleton(\App\Core\audit\AuditService::class, function ($app) {
+            return new \App\Core\audit\AuditService(
+                $app->make(\App\Core\audit\AuditContext::class)
             );
         });
     }

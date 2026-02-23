@@ -2,9 +2,9 @@
 
 namespace App\Modules\admision\models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Core\audit\AuditableModel;
 
-class ParametroSistema extends Model
+class ParametroSistema extends AuditableModel
 {
     protected $table = 'parametros_sistema';
 

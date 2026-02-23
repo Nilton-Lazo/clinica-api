@@ -2,12 +2,12 @@
 
 namespace App\Modules\admision\models;
 
+use App\Core\audit\AuditableModel;
 use App\Core\support\RecordStatus;
 use App\Core\support\SexoPaciente;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 
-class Paciente extends Model
+class Paciente extends AuditableModel
 {
     protected $table = 'pacientes';
 
@@ -99,6 +99,12 @@ class Paciente extends Model
 
         $x = trim(($a . ' ' . $b . ' ' . $n));
         return $x;
+    }
+
+    public function resolveAuditableDisplayName(): string
+    {
+        $name = $this->nombre_completo ?? '';
+        return trim($name) !== '' ? $name : ('Paciente #' . ($this->getKey() ?? 'nuevo'));
     }
 
     public function getEdadAttribute(): ?int

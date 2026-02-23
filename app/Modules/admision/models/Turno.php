@@ -2,11 +2,11 @@
 
 namespace App\Modules\admision\models;
 
+use App\Core\audit\AuditableModel;
 use App\Core\support\RecordStatus;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 
-class Turno extends Model
+class Turno extends AuditableModel
 {
     protected $table = 'turnos';
 

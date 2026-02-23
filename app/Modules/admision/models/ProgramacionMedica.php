@@ -2,10 +2,10 @@
 
 namespace App\Modules\admision\models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Core\audit\AuditableModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class ProgramacionMedica extends Model
+class ProgramacionMedica extends AuditableModel
 {
     protected $table = 'programaciones_medicas';
 

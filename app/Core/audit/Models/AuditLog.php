@@ -12,5 +12,7 @@ class AuditLog extends Model
 
     protected $casts = [
         'metadata' => 'array',
+        'old_values' => 'array',
+        'new_values' => 'array',
     ];
 }

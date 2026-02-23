@@ -3,9 +3,9 @@
 namespace App\Modules\admision\models;
 
 use App\Core\support\SexoPaciente;
-use Illuminate\Database\Eloquent\Model;
+use App\Core\audit\AuditableModel;
 
-class AgendaCita extends Model
+class AgendaCita extends AuditableModel
 {
     protected $table = 'agenda_citas';
 
