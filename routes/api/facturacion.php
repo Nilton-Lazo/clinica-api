@@ -1,12 +1,12 @@
 <?php
 
-use App\Modules\admision\controllers\ficheros\GrupoServicioController;
-use App\Modules\admision\controllers\ficheros\TarifaController;
-use App\Modules\admision\controllers\ficheros\TarifaCategoriaController;
-use App\Modules\admision\controllers\ficheros\TarifaClonacionController;
-use App\Modules\admision\controllers\ficheros\TarifaServicioController;
-use App\Modules\admision\controllers\ficheros\TarifaSubcategoriaController;
-use App\Modules\admision\controllers\ficheros\TarifarioCatalogoController;
+use App\Modules\ficheros\controllers\GrupoServicioController;
+use App\Modules\ficheros\controllers\TarifaController;
+use App\Modules\ficheros\controllers\TarifaCategoriaController;
+use App\Modules\ficheros\controllers\TarifaClonacionController;
+use App\Modules\ficheros\controllers\TarifaServicioController;
+use App\Modules\ficheros\controllers\TarifaSubcategoriaController;
+use App\Modules\ficheros\controllers\TarifarioCatalogoController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('facturacion')->middleware(['auth:sanctum', 'token.fresh', 'audit'])->group(function () {

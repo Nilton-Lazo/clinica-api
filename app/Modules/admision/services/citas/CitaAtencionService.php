@@ -196,7 +196,7 @@ class CitaAtencionService
     public function actualizarSoloDatos(int $agendaCitaId, array $data): array
     {
         $cita = AgendaCita::query()->with(['paciente.planes' => function ($q) {
-            $q->with('tipoCliente:id,codigo,descripcion_tipo_cliente,tarifa_id');
+            $q->with('tipoCliente:id,codigo,descripcion_tipo_cliente,tarifa_id,iafa_id');
         }])->findOrFail($agendaCitaId);
 
         if ($cita->estado !== RecordStatus::ACTIVO->value) {
@@ -226,10 +226,12 @@ class CitaAtencionService
 
         return DB::transaction(function () use ($cita, $paciente, $pacientePlanId, $parentescoSeguro, $titularNombre, $serviciosInput, $montoAPagar, $soatActivo, $soatNumeroPoliza, $soatNumeroPlaca, $indicadores) {
             $tarifaId = null;
+            $iafaId = null;
             if ($pacientePlanId) {
                 $plan = $paciente->planes()->where('id', $pacientePlanId)->first();
                 if ($plan && $plan->tipoCliente) {
                     $tarifaId = (int)$plan->tipoCliente->tarifa_id;
+                    $iafaId = $plan->tipoCliente->iafa_id ? (int)$plan->tipoCliente->iafa_id : null;
                 }
             }
 
@@ -257,6 +259,9 @@ class CitaAtencionService
                     $this->syncServicios($atencion, $serviciosInput);
                 }
             }
+
+            $cita->iafa_id = $iafaId;
+            $cita->save();
 
             $paciente->parentesco_seguro = $parentescoSeguro ?: $paciente->parentesco_seguro;
             $paciente->titular_nombre = $titularNombre !== '' ? $titularNombre : $paciente->titular_nombre;
@@ -323,10 +328,12 @@ class CitaAtencionService
             }
 
             $tarifaId = null;
+            $iafaId = null;
             if ($pacientePlanId) {
-                $plan = $paciente->planes()->where('id', $pacientePlanId)->first();
+                $plan = $paciente->planes()->with('tipoCliente:id,iafa_id,tarifa_id')->where('id', $pacientePlanId)->first();
                 if ($plan && $plan->tipoCliente) {
                     $tarifaId = (int)$plan->tipoCliente->tarifa_id;
+                    $iafaId = $plan->tipoCliente->iafa_id ? (int)$plan->tipoCliente->iafa_id : null;
                 }
             }
 
@@ -366,6 +373,7 @@ class CitaAtencionService
 
             $cita->cuenta = $nroCuenta;
             $cita->estado_atencion = CitaAtencionEstado::ATENDIDO->value;
+            $cita->iafa_id = $iafaId;
             $cita->save();
 
             $paciente->parentesco_seguro = $parentescoSeguro ?: $paciente->parentesco_seguro;

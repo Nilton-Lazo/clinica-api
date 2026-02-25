@@ -5,6 +5,7 @@ namespace App\Modules\admision\controllers\citas;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\AgendaCita;
 use App\Modules\admision\requests\citas\AgendaCitaStoreRequest;
+use App\Modules\admision\requests\citas\AgendaMedicaInitRequest;
 use App\Modules\admision\requests\citas\AgendaMedicaOptionsRequest;
 use App\Modules\admision\requests\citas\AgendaMedicaSlotsRequest;
 use App\Modules\admision\services\citas\AgendaMedicaService;
@@ -19,6 +20,15 @@ class AgendaMedicaController extends Controller
         $this->authorize('viewAny', AgendaCita::class);
 
         $data = $this->service->opciones($request->validated());
+
+        return response()->json(['data' => $data]);
+    }
+
+    public function init(AgendaMedicaInitRequest $request)
+    {
+        $this->authorize('viewAny', AgendaCita::class);
+
+        $data = $this->service->initAgenda($request->validated());
 
         return response()->json(['data' => $data]);
     }

@@ -24,10 +24,19 @@ class RouteServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /** API general: límite por usuario/IP para evitar abuso; no bloquea a otros usuarios. */
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
         });
-    
+
+        /**
+         * Agenda médica (lecturas): uso intenso al cambiar fecha/servicio/médico y varios usuarios.
+         * Límite alto por usuario para no cortar uso legítimo; escrituras usan sensitive-write.
+         */
+        RateLimiter::for('agenda-api', function (Request $request) {
+            return Limit::perMinute(2000)->by($request->user()?->id ?: $request->ip());
+        });
+
         RateLimiter::for('login', function (Request $request) {
             $identifier = (string) $request->input('identifier', '');
     

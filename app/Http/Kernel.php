@@ -26,8 +26,9 @@ class Kernel extends HttpKernel
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
 
+        // Throttle solo por ruta (cada ruta declara throttle:api, throttle:agenda-api, etc.).
+        // Así no hay un límite global que bloquee a muchos usuarios o uso intenso de agenda.
         'api' => [
-            \Illuminate\Routing\Middleware\ThrottleRequests::class . ':api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             'security.headers',
         ],

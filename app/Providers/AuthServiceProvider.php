@@ -6,16 +6,16 @@ use App\Models\User;
 use App\Modules\seguridad\Policies\UserPolicy;
 
 use App\Modules\admision\models\Especialidad;
-use App\Modules\admision\policies\ficheros\EspecialidadPolicy;
+use App\Modules\ficheros\policies\EspecialidadPolicy;
 
 use App\Modules\admision\models\Consultorio;
-use App\Modules\admision\policies\ficheros\ConsultorioPolicy;
+use App\Modules\ficheros\policies\ConsultorioPolicy;
 
 use App\Modules\admision\models\Medico;
-use App\Modules\admision\policies\ficheros\MedicoPolicy;
+use App\Modules\ficheros\policies\MedicoPolicy;
 
 use App\Modules\admision\models\Turno;
-use App\Modules\admision\policies\ficheros\TurnoPolicy;
+use App\Modules\ficheros\policies\TurnoPolicy;
 
 use App\Modules\admision\models\ProgramacionMedica;
 use App\Modules\admision\policies\citas\ProgramacionMedicaPolicy;
@@ -23,28 +23,28 @@ use App\Modules\admision\models\AgendaCita;
 use App\Modules\admision\policies\citas\AgendaCitaPolicy;
 
 use App\Modules\admision\models\TipoIafa;
-use App\Modules\admision\policies\ficheros\TipoIafaPolicy;
+use App\Modules\ficheros\policies\TipoIafaPolicy;
 
 use App\Modules\admision\models\Iafa;
-use App\Modules\admision\policies\ficheros\IafaPolicy;
+use App\Modules\ficheros\policies\IafaPolicy;
 
 use App\Modules\admision\models\Contratante;
-use App\Modules\admision\policies\ficheros\ContratantePolicy;
+use App\Modules\ficheros\policies\ContratantePolicy;
 
 use App\Modules\admision\models\Tarifa;
-use App\Modules\admision\policies\ficheros\TarifaPolicy;
+use App\Modules\ficheros\policies\TarifaPolicy;
 
 use App\Modules\admision\models\TipoCliente;
-use App\Modules\admision\policies\ficheros\TipoClientePolicy;
+use App\Modules\ficheros\policies\TipoClientePolicy;
 
 use App\Modules\admision\models\TarifaCategoria;
-use App\Modules\admision\policies\ficheros\TarifaCategoriaPolicy;
+use App\Modules\ficheros\policies\TarifaCategoriaPolicy;
 
 use App\Modules\admision\models\TarifaSubcategoria;
-use App\Modules\admision\policies\ficheros\TarifaSubcategoriaPolicy;
+use App\Modules\ficheros\policies\TarifaSubcategoriaPolicy;
 
 use App\Modules\admision\models\TarifaServicio;
-use App\Modules\admision\policies\ficheros\TarifaServicioPolicy;
+use App\Modules\ficheros\policies\TarifaServicioPolicy;
 
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\policies\pacientes\PacientePolicy;

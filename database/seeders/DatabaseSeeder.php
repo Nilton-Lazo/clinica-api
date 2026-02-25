@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             InitialAdminSeeder::class,
+            GruposServicioSeeder::class,
             TarifaPrecioDirectoSeeder::class,
             CatalogosPacienteSeeder::class,
             SystemKeySeeder::class,

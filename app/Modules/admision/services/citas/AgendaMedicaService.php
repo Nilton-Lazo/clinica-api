@@ -97,6 +97,61 @@ class AgendaMedicaService
         ];
     }
 
+    public function initAgenda(array $filters): array
+    {
+        $fecha = trim((string)$filters['fecha']);
+        
+        // 1. Obtener todas las especialidades para la fecha
+        $opciones = $this->opciones(['fecha' => $fecha]);
+        $especialidades = $opciones['especialidades'];
+        
+        if (empty($especialidades)) {
+            return [
+                'opciones' => ['especialidades' => [], 'medicos' => []],
+                'citas' => null,
+                'slots' => null,
+                'programacion' => null,
+                'defaults' => ['especialidad_id' => null, 'medico_id' => null],
+            ];
+        }
+        
+        // 2. Tomar la primera especialidad y obtener sus médicos
+        $primeraEspecialidadId = (int)$especialidades[0]['id'];
+        $opcionesConMedicos = $this->opciones(['fecha' => $fecha, 'especialidad_id' => $primeraEspecialidadId]);
+        $medicos = $opcionesConMedicos['medicos'];
+        
+        if (empty($medicos)) {
+            return [
+                'opciones' => ['especialidades' => $especialidades, 'medicos' => []],
+                'citas' => null,
+                'slots' => null,
+                'programacion' => null,
+                'defaults' => ['especialidad_id' => $primeraEspecialidadId, 'medico_id' => null],
+            ];
+        }
+        
+        // 3. Tomar el primer médico y cargar todo
+        $primerMedicoId = (int)$medicos[0]['id'];
+        $fullFilters = [
+            'fecha' => $fecha,
+            'especialidad_id' => $primeraEspecialidadId,
+            'medico_id' => $primerMedicoId,
+            'per_page' => 25, // Valor por defecto del frontend
+        ];
+        
+        $citasResult = $this->listarCitas($fullFilters);
+        $slotsResult = $this->slots($fullFilters);
+        
+        return [
+            'opciones' => ['especialidades' => $especialidades, 'medicos' => $medicos],
+            'citas' => $citasResult,
+            'slots' => $slotsResult,
+            'programacion' => $citasResult['programacion'] ?? $slotsResult['programacion'] ?? null,
+            'defaults' => ['especialidad_id' => $primeraEspecialidadId, 'medico_id' => $primerMedicoId],
+        ];
+    }
+
+
     public function listarCitas(array $filters): array
     {
         if (!Schema::hasTable('agenda_citas')) {

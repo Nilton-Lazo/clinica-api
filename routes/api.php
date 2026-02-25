@@ -6,4 +6,5 @@ require __DIR__ . '/api/login.php';
 require __DIR__ . '/api/seguridad.php';
 require __DIR__ . '/api/telemetria.php';
 require __DIR__ . '/api/admision.php';
+require __DIR__ . '/api/ficheros.php';
 require __DIR__ . '/api/facturacion.php';
