@@ -32,8 +32,35 @@ class CatalogoPacienteController extends Controller
         ]);
     }
 
+    /**
+     * Lista completa de paises para combos (nacionalidad). Una sola respuesta, cache en backend.
+     */
+    public function paisesList()
+    {
+        return response()->json([
+            'data' => $this->service->paisesList(),
+        ]);
+    }
+
     public function ubigeos(Request $request)
     {
+        $page = (int) $request->get('page', 1);
+        $perPage = (int) $request->get('per_page', 50);
+        $q = $request->get('q');
+
+        if ($page === 1 && ($q === null || trim((string) $q) === '')) {
+            $cached = $this->service->ubigeosFirstPage($perPage);
+            return response()->json([
+                'data' => $cached,
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => count($cached),
+                    'total' => count($cached),
+                    'last_page' => 1,
+                ],
+            ]);
+        }
+
         $p = $this->service->ubigeos($request->only(['q', 'per_page', 'page']));
 
         return response()->json([

@@ -544,6 +544,8 @@ class PacienteService
     {
         return $paciente->load([
             'paisNacionalidad',
+            'ubigeoNacimiento',
+            'ubigeoDomicilio',
             'contactoEmergencia',
             'planes.tipoCliente.iafa',
         ]);

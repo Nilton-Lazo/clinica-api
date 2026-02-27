@@ -30,6 +30,7 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
     Route::prefix('catalogos')->group(function () {
         Route::get('paciente-form', [CatalogoPacienteController::class, 'pacienteForm'])->middleware('throttle:api');
         Route::get('paises', [CatalogoPacienteController::class, 'paises'])->middleware('throttle:api');
+        Route::get('paises/list', [CatalogoPacienteController::class, 'paisesList'])->middleware('throttle:api');
         Route::get('ubigeos', [CatalogoPacienteController::class, 'ubigeos'])->middleware('throttle:api');
     });
 
