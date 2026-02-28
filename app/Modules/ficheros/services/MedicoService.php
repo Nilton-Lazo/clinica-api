@@ -7,6 +7,7 @@ use App\Core\support\RecordStatus;
 use App\Core\support\TipoProfesionalClinica;
 use App\Modules\admision\models\Medico;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class MedicoService
@@ -43,44 +44,66 @@ class MedicoService
         return $this->formatCodigo($next);
     }
 
+    private const INDEX_CACHE_TTL_SECONDS = 30;
+    private const CACHE_VERSION_KEY = 'ficheros:medicos:version';
+
+    private function getListCacheVersion(): int
+    {
+        return (int) Cache::get(self::CACHE_VERSION_KEY, 0);
+    }
+
+    private function invalidateListCache(): void
+    {
+        Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
+    }
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $perPage = (int)($filters['per_page'] ?? 50);
         $perPage = max(1, min(100, $perPage));
+        $page = max(1, (int)($filters['page'] ?? 1));
 
         $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
         $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
 
-        $query = Medico::query()->with(['especialidad:id,codigo,descripcion']);
+        $version = $this->getListCacheVersion();
+        $cacheKey = sprintf('ficheros:medicos:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
 
-        if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
-        }
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
+            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
+            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
 
-        if ($q !== null && $q !== '') {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('codigo', 'ilike', "%{$q}%")
-                    ->orWhere('dni', 'ilike', "%{$q}%")
-                    ->orWhere('cmp', 'ilike', "%{$q}%")
-                    ->orWhere('rne', 'ilike', "%{$q}%")
-                    ->orWhere('ruc', 'ilike', "%{$q}%")
-                    ->orWhere('nombres', 'ilike', "%{$q}%")
-                    ->orWhere('apellido_paterno', 'ilike', "%{$q}%")
-                    ->orWhere('apellido_materno', 'ilike', "%{$q}%")
-                    ->orWhere('email', 'ilike', "%{$q}%");
-            });
-        }
+            $query = Medico::query()->with(['especialidad:id,codigo,descripcion']);
 
-        return $query
-            ->orderBy('apellido_paterno')
-            ->orderBy('apellido_materno')
-            ->orderBy('nombres')
-            ->paginate($perPage)
-            ->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-            ]);
+            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
+                $query->where('estado', $status);
+            }
+
+            if ($q !== null && $q !== '') {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('codigo', 'ilike', "%{$q}%")
+                        ->orWhere('dni', 'ilike', "%{$q}%")
+                        ->orWhere('cmp', 'ilike', "%{$q}%")
+                        ->orWhere('rne', 'ilike', "%{$q}%")
+                        ->orWhere('ruc', 'ilike', "%{$q}%")
+                        ->orWhere('nombres', 'ilike', "%{$q}%")
+                        ->orWhere('apellido_paterno', 'ilike', "%{$q}%")
+                        ->orWhere('apellido_materno', 'ilike', "%{$q}%")
+                        ->orWhere('email', 'ilike', "%{$q}%");
+                });
+            }
+
+            return $query
+                ->orderBy('apellido_paterno')
+                ->orderBy('apellido_materno')
+                ->orderBy('nombres')
+                ->paginate($perPage, ['*'], 'page', $page)
+                ->appends([
+                    'per_page' => $perPage,
+                    'q' => $q,
+                    'status' => $status,
+                ]);
+        });
     }
 
     public function create(array $data): Medico
@@ -149,6 +172,7 @@ class MedicoService
                 201
             );
 
+            $this->invalidateListCache();
             return $medico->load(['especialidad:id,codigo,descripcion']);
         });
     }
@@ -247,6 +271,7 @@ class MedicoService
                 200
             );
 
+            $this->invalidateListCache();
             return $medico->load(['especialidad:id,codigo,descripcion']);
         });
     }
@@ -272,6 +297,7 @@ class MedicoService
                 200
             );
 
+            $this->invalidateListCache();
             return $medico->load(['especialidad:id,codigo,descripcion']);
         });
     }

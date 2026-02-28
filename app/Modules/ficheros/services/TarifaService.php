@@ -7,6 +7,7 @@ use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Iafa;
 use App\Modules\admision\models\Tarifa;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -39,35 +40,57 @@ class TarifaService
         return $this->formatCodigo($this->nextCodigoInt());
     }
 
+    private const INDEX_CACHE_TTL_SECONDS = 30;
+    private const CACHE_VERSION_KEY = 'ficheros:tarifas:version';
+
+    private function getListCacheVersion(): int
+    {
+        return (int) Cache::get(self::CACHE_VERSION_KEY, 0);
+    }
+
+    private function invalidateListCache(): void
+    {
+        Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
+    }
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $perPage = (int)($filters['per_page'] ?? 50);
         $perPage = max(1, min(100, $perPage));
+        $page = max(1, (int)($filters['page'] ?? 1));
 
         $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
         $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
 
-        $query = Tarifa::query();
+        $version = $this->getListCacheVersion();
+        $cacheKey = sprintf('ficheros:tarifas:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
 
-        if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
-        }
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
+            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
+            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
 
-        if ($q !== null && $q !== '') {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('codigo', 'ilike', "%{$q}%")
-                    ->orWhere('descripcion_tarifa', 'ilike', "%{$q}%");
-            });
-        }
+            $query = Tarifa::query();
 
-        return $query
-            ->orderByRaw('CAST(codigo AS INTEGER) ASC')
-            ->paginate($perPage)
-            ->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-            ]);
+            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
+                $query->where('estado', $status);
+            }
+
+            if ($q !== null && $q !== '') {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('codigo', 'ilike', "%{$q}%")
+                        ->orWhere('descripcion_tarifa', 'ilike', "%{$q}%");
+                });
+            }
+
+            return $query
+                ->orderByRaw('CAST(codigo AS INTEGER) ASC')
+                ->paginate($perPage, ['*'], 'page', $page)
+                ->appends([
+                    'per_page' => $perPage,
+                    'q' => $q,
+                    'status' => $status,
+                ]);
+        });
     }
 
     private function enforceParticularRule(?int $iafaId, bool $requiereAcreditacion): bool
@@ -198,6 +221,7 @@ class TarifaService
                 201
             );
 
+            $this->invalidateListCache();
             return $tarifa;
         });
     }
@@ -334,6 +358,7 @@ class TarifaService
                 200
             );
 
+            $this->invalidateListCache();
             return $tarifa;
         });
     }
@@ -371,6 +396,7 @@ class TarifaService
                 200
             );
 
+            $this->invalidateListCache();
             return $tarifa;
         });
     }
@@ -397,6 +423,7 @@ class TarifaService
                 200
             );
 
+            $this->invalidateListCache();
             return $tarifa;
         });
     }
