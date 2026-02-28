@@ -12,6 +12,7 @@ use App\Modules\admision\models\ProgramacionMedica;
 use App\Modules\admision\models\Turno;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -324,10 +325,11 @@ class AgendaMedicaService
         $orden = array_search($hora, $allowed, true);
         $orden = $orden === false ? 0 : ($orden + 1);
 
-        $codigo = $this->nextCodigo((int)$programacion->id);
+        try {
+            return DB::transaction(function () use ($programacion, $paciente, $data, $hora, $orden, $iafaId) {
+                $codigo = $this->nextCodigoForProgramacion((int)$programacion->id);
 
-        return DB::transaction(function () use ($programacion, $paciente, $data, $hora, $orden, $codigo, $iafaId) {
-            $cita = AgendaCita::create([
+                $cita = AgendaCita::create([
                 'codigo' => $codigo,
                 'programacion_medica_id' => (int)$programacion->id,
                 'fecha' => $programacion->fecha,
@@ -366,6 +368,16 @@ class AgendaMedicaService
 
             return $cita;
         });
+        } catch (QueryException $e) {
+            // Manejar colisión de clave única por hora ocupada.
+            if ((string)$e->getCode() === '23000') {
+                throw ValidationException::withMessages([
+                    'hora' => ['La hora seleccionada ya está ocupada.'],
+                ]);
+            }
+
+            throw $e;
+        }
     }
 
     private function resolveProgramacion(string $fecha, int $especialidadId, int $medicoId): ?ProgramacionMedica
@@ -492,10 +504,11 @@ class AgendaMedicaService
         });
     }
 
-    private function nextCodigo(int $programacionId): string
+    private function nextCodigoForProgramacion(int $programacionId): string
     {
         $last = AgendaCita::query()
             ->where('programacion_medica_id', $programacionId)
+            ->lockForUpdate()
             ->select('codigo')
             ->orderByRaw('CAST(codigo AS BIGINT) DESC')
             ->value('codigo');

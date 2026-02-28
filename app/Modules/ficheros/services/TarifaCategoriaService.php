@@ -7,6 +7,7 @@ use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -82,20 +83,32 @@ class TarifaCategoriaService
         ]);
     }
 
+    private const LOOKUP_CACHE_TTL_SECONDS = 60;
+
     public function lookup(Tarifa $tarifa, bool $onlyActivas = true): array
     {
-        $q = TarifaCategoria::query()
-            ->where('tarifa_id', $tarifa->id)
-            ->when($onlyActivas, fn($x) => $x->where('estado', RecordStatus::ACTIVO->value))
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre', 'estado']);
+        $key = sprintf('tarifario:cat:lookup:%s:%s', $tarifa->id, $onlyActivas ? '1' : '0');
 
-        return $q->map(fn($c) => [
-            'id' => (int)$c->id,
-            'codigo' => (string)$c->codigo,
-            'descripcion' => (string)$c->nombre,
-            'estado' => (string)$c->estado,
-        ])->all();
+        return Cache::remember($key, self::LOOKUP_CACHE_TTL_SECONDS, function () use ($tarifa, $onlyActivas) {
+            $q = TarifaCategoria::query()
+                ->where('tarifa_id', $tarifa->id)
+                ->when($onlyActivas, fn($x) => $x->where('estado', RecordStatus::ACTIVO->value))
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre', 'estado']);
+
+            return $q->map(fn($c) => [
+                'id' => (int)$c->id,
+                'codigo' => (string)$c->codigo,
+                'descripcion' => (string)$c->nombre,
+                'estado' => (string)$c->estado,
+            ])->all();
+        });
+    }
+
+    public function clearLookupCache(Tarifa $tarifa): void
+    {
+        Cache::forget(sprintf('tarifario:cat:lookup:%s:1', $tarifa->id));
+        Cache::forget(sprintf('tarifario:cat:lookup:%s:0', $tarifa->id));
     }
 
     public function create(Tarifa $tarifa, array $data): TarifaCategoria
@@ -151,6 +164,7 @@ class TarifaCategoriaService
                 201
             );
 
+            $this->clearLookupCache($tarifa);
             return $categoria;
         });
     }
@@ -294,6 +308,7 @@ class TarifaCategoriaService
                 200
             );
 
+            $this->clearLookupCache($tarifa);
             return $categoria;
         });
     }
@@ -335,6 +350,7 @@ class TarifaCategoriaService
                 200
             );
 
+            $this->clearLookupCache($tarifa);
             return $categoria;
         });
     }

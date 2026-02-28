@@ -8,6 +8,7 @@ use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
 use App\Modules\admision\models\TarifaSubcategoria;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -115,26 +116,33 @@ class TarifaSubcategoriaService
         ]);
     }
 
+    private const LOOKUP_CACHE_TTL_SECONDS = 60;
+
     public function lookup(Tarifa $tarifa, int $categoriaId, bool $onlyActivas = true): array
     {
         if ($categoriaId < 1) {
             return [];
         }
 
-        $q = TarifaSubcategoria::query()
-            ->where('tarifa_id', $tarifa->id)
-            ->where('categoria_id', $categoriaId)
-            ->when($onlyActivas, fn($x) => $x->where('estado', RecordStatus::ACTIVO->value))
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre', 'estado']);
+        $key = sprintf('tarifario:sub:lookup:%s:%s:%s', $tarifa->id, $categoriaId, $onlyActivas ? '1' : '0');
 
-        return $q->map(fn($s) => [
-            'id' => (int)$s->id,
-            'codigo' => (string)$s->codigo,
-            'descripcion' => (string)$s->nombre,
-            'estado' => (string)$s->estado,
-        ])->all();
+        return Cache::remember($key, self::LOOKUP_CACHE_TTL_SECONDS, function () use ($tarifa, $categoriaId, $onlyActivas) {
+            $q = TarifaSubcategoria::query()
+                ->where('tarifa_id', $tarifa->id)
+                ->where('categoria_id', $categoriaId)
+                ->when($onlyActivas, fn($x) => $x->where('estado', RecordStatus::ACTIVO->value))
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre', 'estado']);
+
+            return $q->map(fn($s) => [
+                'id' => (int)$s->id,
+                'codigo' => (string)$s->codigo,
+                'descripcion' => (string)$s->nombre,
+                'estado' => (string)$s->estado,
+            ])->all();
+        });
     }
+
 
     public function create(Tarifa $tarifa, array $data): TarifaSubcategoria
     {
