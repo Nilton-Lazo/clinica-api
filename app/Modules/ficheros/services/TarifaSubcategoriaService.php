@@ -82,38 +82,49 @@ class TarifaSubcategoriaService
         return $this->formatCodigo($n + 1);
     }
 
+    private const INDEX_CACHE_TTL_SECONDS = 30;
+
     public function paginate(Tarifa $tarifa, array $filters): LengthAwarePaginator
     {
         $perPage = (int)($filters['per_page'] ?? 50);
         $perPage = max(1, min(100, $perPage));
+        $page = max(1, (int)($filters['page'] ?? 1));
 
         $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
         $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
         $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
 
-        $query = TarifaSubcategoria::query()->where('tarifa_id', $tarifa->id);
+        $cacheKey = sprintf('tarifario:sub:index:%s:%s:%s:%s:%s:%s', $tarifa->id, $page, $perPage, $q ?? '', $status ?? '', $categoriaId);
 
-        if ($categoriaId > 0) {
-            $query->where('categoria_id', $categoriaId);
-        }
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $filters, $perPage, $page) {
+            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
+            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
+            $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
 
-        if ($status && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
-        }
+            $query = TarifaSubcategoria::query()->where('tarifa_id', $tarifa->id);
 
-        if ($q) {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('codigo', 'ilike', "%{$q}%")
-                    ->orWhere('nombre', 'ilike', "%{$q}%");
-            });
-        }
+            if ($categoriaId > 0) {
+                $query->where('categoria_id', $categoriaId);
+            }
 
-        return $query->orderBy('categoria_id')->orderBy('codigo')->paginate($perPage)->appends([
-            'per_page' => $perPage,
-            'q' => $q,
-            'status' => $status,
-            'categoria_id' => $categoriaId,
-        ]);
+            if ($status && in_array($status, RecordStatus::values(), true)) {
+                $query->where('estado', $status);
+            }
+
+            if ($q) {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('codigo', 'ilike', "%{$q}%")
+                        ->orWhere('nombre', 'ilike', "%{$q}%");
+                });
+            }
+
+            return $query->orderBy('categoria_id')->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+                'per_page' => $perPage,
+                'q' => $q,
+                'status' => $status,
+                'categoria_id' => $categoriaId,
+            ]);
+        });
     }
 
     private const LOOKUP_CACHE_TTL_SECONDS = 60;

@@ -10,6 +10,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\LengthAwarePaginator as LengthAwarePaginatorConcrete;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -189,6 +190,8 @@ class TarifarioCatalogoService
         return is_numeric($value) ? (float)$value : (float)($tarifa->factor_otros_servicios ?? 1);
     }
 
+    private const SERVICIOS_INDEX_CACHE_TTL_SECONDS = 30;
+
     public function paginateServicios(Tarifa $tarifa, array $filters): LengthAwarePaginator
     {
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
@@ -199,16 +202,41 @@ class TarifarioCatalogoService
 
         $perPage = (int)($filters['per_page'] ?? 50);
         $perPage = max(1, min(100, $perPage));
+        $page = max(1, (int)($filters['page'] ?? 1));
 
         $q = $filters['q'] ?? null;
         $codigo = $filters['codigo'] ?? null;
         $nomenclador = $filters['nomenclador'] ?? null;
-
         $status = $filters['status'] ?? null;
         $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : null;
         $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : null;
+        $horaStr = isset($filters['hora']) && is_string($filters['hora']) ? trim($filters['hora']) : null;
 
-        $query = DB::table('tarifa_servicios AS ts')
+        $cacheKey = sprintf(
+            'tarifario:catalogo:servicios:%s:%s:%s:%s:%s:%s:%s:%s:%s',
+            $tarifa->id,
+            $page,
+            $perPage,
+            $q ?? '',
+            $status ?? '',
+            $categoriaId ?? '',
+            $subcategoriaId ?? '',
+            $codigo ?? '',
+            $nomenclador ?? ''
+        );
+        if ($horaStr !== null && $horaStr !== '') {
+            $cacheKey .= ':' . $horaStr;
+        }
+
+        return Cache::remember($cacheKey, self::SERVICIOS_INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $filters, $perPage, $page) {
+            $q = $filters['q'] ?? null;
+            $codigo = $filters['codigo'] ?? null;
+            $nomenclador = $filters['nomenclador'] ?? null;
+            $status = $filters['status'] ?? null;
+            $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : null;
+            $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : null;
+
+            $query = DB::table('tarifa_servicios AS ts')
             ->join('tarifa_categorias AS tc', 'tc.id', '=', 'ts.categoria_id')
             ->join('tarifa_subcategorias AS tsc', 'tsc.id', '=', 'ts.subcategoria_id')
             ->where('ts.tarifa_id', (int)$tarifa->id)
@@ -274,7 +302,7 @@ class TarifarioCatalogoService
             ->orderBy('tsc.codigo')
             ->orderBy('ts.servicio_codigo');
 
-        $paginator = $query->paginate($perPage);
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
         $horaStr = isset($filters['hora']) && is_string($filters['hora']) ? trim($filters['hora']) : null;
         $reglasPorCategoria = [];
 
@@ -329,7 +357,8 @@ class TarifarioCatalogoService
             ['path' => $paginator->path()]
         );
 
-        return $paginator;
+            return $paginator;
+        });
     }
 
     public function arbolTarifaBase(): array

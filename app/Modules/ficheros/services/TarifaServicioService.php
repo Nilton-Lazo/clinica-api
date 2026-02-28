@@ -10,6 +10,7 @@ use App\Modules\admision\models\TarifaCategoria;
 use App\Modules\admision\models\TarifaServicio;
 use App\Modules\admision\models\TarifaSubcategoria;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -129,10 +130,13 @@ class TarifaServicioService
         ];
     }
 
+    private const INDEX_CACHE_TTL_SECONDS = 30;
+
     public function paginate(Tarifa $tarifa, array $filters): LengthAwarePaginator
     {
         $perPage = (int)($filters['per_page'] ?? 50);
         $perPage = max(1, min(100, $perPage));
+        $page = max(1, (int)($filters['page'] ?? 1));
 
         $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
         $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
@@ -140,34 +144,44 @@ class TarifaServicioService
         $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : 0;
         $grupoCodigo = isset($filters['grupo_codigo']) ? trim((string)$filters['grupo_codigo']) : null;
 
-        $query = TarifaServicio::query()->where('tarifa_id', $tarifa->id);
+        $cacheKey = sprintf('tarifario:svc:index:%s:%s:%s:%s:%s:%s:%s:%s', $tarifa->id, $page, $perPage, $q ?? '', $status ?? '', $categoriaId, $subcategoriaId, $grupoCodigo ?? '');
 
-        if ($categoriaId > 0) $query->where('categoria_id', $categoriaId);
-        if ($subcategoriaId > 0) $query->where('subcategoria_id', $subcategoriaId);
-        if ($grupoCodigo !== null && $grupoCodigo !== '') {
-            $query->where('grupo_codigo', $grupoCodigo);
-        }
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $filters, $perPage, $page) {
+            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
+            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
+            $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
+            $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : 0;
+            $grupoCodigo = isset($filters['grupo_codigo']) ? trim((string)$filters['grupo_codigo']) : null;
 
-        if ($status && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
-        }
+            $query = TarifaServicio::query()->where('tarifa_id', $tarifa->id);
 
-        if ($q) {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('codigo', 'ilike', "%{$q}%")
-                    ->orWhere('descripcion', 'ilike', "%{$q}%")
-                    ->orWhere('nomenclador', 'ilike', "%{$q}%");
-            });
-        }
+            if ($categoriaId > 0) $query->where('categoria_id', $categoriaId);
+            if ($subcategoriaId > 0) $query->where('subcategoria_id', $subcategoriaId);
+            if ($grupoCodigo !== null && $grupoCodigo !== '') {
+                $query->where('grupo_codigo', $grupoCodigo);
+            }
 
-        return $query->orderBy('codigo')->paginate($perPage)->appends([
-            'per_page' => $perPage,
-            'q' => $q,
-            'status' => $status,
-            'categoria_id' => $categoriaId,
-            'subcategoria_id' => $subcategoriaId,
-            'grupo_codigo' => $grupoCodigo,
-        ]);
+            if ($status && in_array($status, RecordStatus::values(), true)) {
+                $query->where('estado', $status);
+            }
+
+            if ($q) {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('codigo', 'ilike', "%{$q}%")
+                        ->orWhere('descripcion', 'ilike', "%{$q}%")
+                        ->orWhere('nomenclador', 'ilike', "%{$q}%");
+                });
+            }
+
+            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+                'per_page' => $perPage,
+                'q' => $q,
+                'status' => $status,
+                'categoria_id' => $categoriaId,
+                'subcategoria_id' => $subcategoriaId,
+                'grupo_codigo' => $grupoCodigo,
+            ]);
+        });
     }
 
     public function create(Tarifa $tarifa, array $data): TarifaServicio

@@ -55,32 +55,42 @@ class TarifaCategoriaService
         return $this->formatCodigo($n + 1);
     }
 
+    private const INDEX_CACHE_TTL_SECONDS = 30;
+
     public function paginate(Tarifa $tarifa, array $filters): LengthAwarePaginator
     {
         $perPage = (int)($filters['per_page'] ?? 50);
         $perPage = max(1, min(100, $perPage));
+        $page = max(1, (int)($filters['page'] ?? 1));
 
         $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
         $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
 
-        $query = TarifaCategoria::query()->where('tarifa_id', $tarifa->id);
+        $cacheKey = sprintf('tarifario:cat:index:%s:%s:%s:%s:%s', $tarifa->id, $page, $perPage, $q ?? '', $status ?? '');
 
-        if ($status && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
-        }
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $filters, $perPage, $page) {
+            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
+            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
 
-        if ($q) {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('codigo', 'ilike', "%{$q}%")
-                    ->orWhere('nombre', 'ilike', "%{$q}%");
-            });
-        }
+            $query = TarifaCategoria::query()->where('tarifa_id', $tarifa->id);
 
-        return $query->orderBy('codigo')->paginate($perPage)->appends([
-            'per_page' => $perPage,
-            'q' => $q,
-            'status' => $status,
-        ]);
+            if ($status && in_array($status, RecordStatus::values(), true)) {
+                $query->where('estado', $status);
+            }
+
+            if ($q) {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('codigo', 'ilike', "%{$q}%")
+                        ->orWhere('nombre', 'ilike', "%{$q}%");
+                });
+            }
+
+            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+                'per_page' => $perPage,
+                'q' => $q,
+                'status' => $status,
+            ]);
+        });
     }
 
     private const LOOKUP_CACHE_TTL_SECONDS = 60;
