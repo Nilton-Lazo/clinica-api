@@ -32,9 +32,6 @@ class CatalogoPacienteController extends Controller
         ]);
     }
 
-    /**
-     * Lista completa de paises para combos (nacionalidad). Una sola respuesta, cache en backend.
-     */
     public function paisesList()
     {
         return response()->json([

@@ -22,9 +22,6 @@ class TarifarioCatalogoController extends Controller
         return response()->json(['data' => $items]);
     }
 
-    /**
-     * Todas las tarifas activas incluyendo el base. Solo para Facturación → Tarifario.
-     */
     public function tarifasParaGestionTarifario(Request $request)
     {
         $this->authorize('viewAny', Tarifa::class);
@@ -61,7 +58,6 @@ class TarifarioCatalogoController extends Controller
             'tarifa_param_type' => gettype($tarifaId),
         ]);
 
-        // Fallback: extraer id de la path por si el route parameter llega mal (ej. literal "{tarifa}")
         if (!is_numeric($tarifaId) || (int) $tarifaId < 1) {
             if (preg_match('#/tarifas/(\d+)/servicios#', '/' . $path, $m)) {
                 $tarifaId = (int) $m[1];

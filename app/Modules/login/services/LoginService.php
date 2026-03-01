@@ -43,14 +43,15 @@ class LoginService
             ]);
         }
 
+        $maxHours = max(1 / 60, (float) config('session_limits.max_hours', 8));
+        $maxSeconds = (int) ceil($maxHours * 3600);
         $tokenName = $deviceName ? ('erp-api:' . $this->normalizeTokenName($deviceName)) : 'erp-api';
-        $newToken = $user->createToken($tokenName);
+        $newToken = $user->createToken($tokenName, ['*'], now()->addSeconds($maxSeconds));
 
-        $maxHours = config('session_limits.max_hours', 8);
         Cache::put(
             'session:last_activity:' . $newToken->accessToken->id,
             now()->toDateTimeString(),
-            now()->addHours($maxHours)
+            now()->addSeconds($maxSeconds)
         );
 
         Audit::log(

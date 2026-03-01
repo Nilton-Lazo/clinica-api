@@ -12,9 +12,6 @@ class CitaAtencionController extends Controller
 {
     public function __construct(private CitaAtencionService $service) {}
 
-    /**
-     * Datos para el formulario de Atención de cita (cita, programación, paciente, planes, atencion existente).
-     */
     public function show(int $id): JsonResponse
     {
         $this->authorize('viewAny', AgendaCita::class);
@@ -24,9 +21,6 @@ class CitaAtencionController extends Controller
         return response()->json($payload);
     }
 
-    /**
-     * Guardar atención o solo actualizar datos (plan, condición, titular).
-     */
     public function store(CitaAtencionStoreRequest $request, int $id): JsonResponse
     {
         $cita = AgendaCita::query()->findOrFail($id);

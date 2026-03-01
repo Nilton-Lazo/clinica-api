@@ -8,10 +8,6 @@ use Illuminate\Support\Facades\Schema;
 
 class TarifaPrecioDirectoSeeder extends Seeder
 {
-    /**
-     * Marca Particular y Privado como precio directo (es_precio_directo = true).
-     * Idempotente: seguro ejecutar con db:seed aunque las tarifas se creen después.
-     */
     public function run(): void
     {
         if (!Schema::hasColumn('tarifas', 'es_precio_directo')) {

@@ -15,10 +15,7 @@ use Illuminate\Support\Facades\Schema;
 
 class TarifarioCatalogoService
 {
-    /**
-     * Mapeo grupo_codigo (grupos_servicio) -> atributo factor en Tarifa.
-     * Si el servicio no tiene grupo o el grupo no está aquí, se usa factor_otros_servicios.
-     */
+
     private const GRUPO_TO_FACTOR = [
         '704101' => 'factor_clinica',
         '704102' => 'factor_laboratorio',
@@ -41,10 +38,6 @@ class TarifarioCatalogoService
         '704119' => 'factor_material_medico',
     ];
 
-    /**
-     * Tarifas operativas (excluye el tarifario base).
-     * Usar en todo el sistema EXCEPTO Facturación → Tarifario.
-     */
     public function listTarifasOperativas(array $filters = []): Collection
     {
         $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
@@ -66,10 +59,6 @@ class TarifarioCatalogoService
             ->get();
     }
 
-    /**
-     * Todas las tarifas activas INCLUYENDO el tarifario base.
-     * Solo para Facturación → Tarifario (gestión de catálogo).
-     */
     public function listTarifasParaGestionTarifario(array $filters = []): Collection
     {
         $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
@@ -127,10 +116,6 @@ class TarifarioCatalogoService
         }
     }
 
-    /**
-     * Normaliza el parámetro hora a H:i:s para createFromFormat.
-     * Acepta: "HH:mm", "HH:mm:ss", o datetime "YYYY-MM-DD HH:mm:ss" (extrae la parte hora).
-     */
     private function normalizarHoraParaRecargo(string $hora): ?string
     {
         $h = trim($hora);
@@ -158,11 +143,6 @@ class TarifarioCatalogoService
         return null;
     }
 
-    /**
-     * Indica si la hora de referencia cae dentro del rango [desde, hasta).
-     * Si desde > hasta se considera rango nocturno (ej. 19:00 a 07:00): aplica si time >= desde o time < hasta.
-     * Si desde <= hasta: aplica si time >= desde y time < hasta.
-     */
     private function horaEnRangoRecargo(Carbon $horaRef, Carbon $desde, Carbon $hasta): bool
     {
         $refMinutos = $horaRef->hour * 60 + $horaRef->minute;
@@ -175,10 +155,6 @@ class TarifarioCatalogoService
         return $refMinutos >= $desdeMinutos || $refMinutos < $hastaMinutos;
     }
 
-    /**
-     * Obtiene el factor de la tarifa para el grupo del servicio.
-     * Si no hay grupo o no está mapeado, usa factor_otros_servicios.
-     */
     private function getFactorForGrupo(Tarifa $tarifa, ?string $grupoCodigo): float
     {
         $key = $grupoCodigo !== null && $grupoCodigo !== '' ? trim($grupoCodigo) : null;

@@ -10,7 +10,6 @@ class SecurityHeaders
 {
     public function handle(Request $request, Closure $next): Response
     {
-        /** @var \Symfony\Component\HttpFoundation\Response $response */
         $response = $next($request);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
@@ -18,8 +17,6 @@ class SecurityHeaders
         $response->headers->set('Referrer-Policy', 'no-referrer');
         $response->headers->set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
 
-        // COOP/CORP: útiles si sesrive UI desde el mismo origen.
-        // Si algún día se rompe integraciones/embeds, se pueden ajustar.
         $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');
         $response->headers->set('Cross-Origin-Resource-Policy', 'same-site');
 
@@ -27,7 +24,6 @@ class SecurityHeaders
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         }
 
-        // CSP SOLO si la respuesta es HTML (Laravel está sirviendo una UI).
         $contentType = (string) ($response->headers->get('Content-Type') ?? '');
         $isHtml = str_contains($contentType, 'text/html');
 
@@ -58,7 +54,7 @@ class SecurityHeaders
                     "form-action 'self'",
                 ]);
             } else {
-                // Producción: lo ideal es NO usar unsafe-inline/unsafe-eval.
+                // Producción: NO usar unsafe-inline/unsafe-eval.
                 $csp = implode('; ', [
                     "default-src 'self'",
                     "base-uri 'self'",

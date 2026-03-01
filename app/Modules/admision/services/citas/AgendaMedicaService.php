@@ -101,8 +101,7 @@ class AgendaMedicaService
     public function initAgenda(array $filters): array
     {
         $fecha = trim((string)$filters['fecha']);
-        
-        // 1. Obtener todas las especialidades para la fecha
+
         $opciones = $this->opciones(['fecha' => $fecha]);
         $especialidades = $opciones['especialidades'];
         
@@ -115,8 +114,7 @@ class AgendaMedicaService
                 'defaults' => ['especialidad_id' => null, 'medico_id' => null],
             ];
         }
-        
-        // 2. Tomar la primera especialidad y obtener sus médicos
+
         $primeraEspecialidadId = (int)$especialidades[0]['id'];
         $opcionesConMedicos = $this->opciones(['fecha' => $fecha, 'especialidad_id' => $primeraEspecialidadId]);
         $medicos = $opcionesConMedicos['medicos'];
@@ -130,14 +128,13 @@ class AgendaMedicaService
                 'defaults' => ['especialidad_id' => $primeraEspecialidadId, 'medico_id' => null],
             ];
         }
-        
-        // 3. Tomar el primer médico y cargar todo
+
         $primerMedicoId = (int)$medicos[0]['id'];
         $fullFilters = [
             'fecha' => $fecha,
             'especialidad_id' => $primeraEspecialidadId,
             'medico_id' => $primerMedicoId,
-            'per_page' => 25, // Valor por defecto del frontend
+            'per_page' => 25,
         ];
         
         $citasResult = $this->listarCitas($fullFilters);
@@ -369,7 +366,6 @@ class AgendaMedicaService
             return $cita;
         });
         } catch (QueryException $e) {
-            // Manejar colisión de clave única por hora ocupada.
             if ((string)$e->getCode() === '23000') {
                 throw ValidationException::withMessages([
                     'hora' => ['La hora seleccionada ya está ocupada.'],

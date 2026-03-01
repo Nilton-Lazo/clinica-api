@@ -4,6 +4,7 @@ namespace App\Exceptions;
 
 use App\Core\audit\Facades\Audit;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -40,6 +41,23 @@ class Handler extends ExceptionHandler
                 'message' => 'Datos inválidos.',
                 'errors' => $e->errors(),
             ], 422);
+        });
+
+        $this->renderable(function (AuthenticationException $e, $request) {
+            Audit::log(
+                action: 'auth.unauthenticated',
+                actionLabel: 'No autenticado',
+                metadata: [
+                    'exception' => class_basename($e),
+                ],
+                result: 'failed',
+                statusCode: 401
+            );
+
+            return response()->json([
+                'message' => 'No autenticado.',
+                'code' => 'UNAUTHENTICATED',
+            ], 401);
         });
 
         $this->renderable(function (Throwable $e, $request) {

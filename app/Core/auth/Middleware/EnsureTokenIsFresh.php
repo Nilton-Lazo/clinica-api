@@ -22,17 +22,25 @@ class EnsureTokenIsFresh
 
         $now = Carbon::now();
 
-        $idleMinutes = config('session_limits.idle_minutes', 15);
-        $maxHours = config('session_limits.max_hours', 8);
+        $idleMinutes = max(1, (int) config('session_limits.idle_minutes', 15));
+        $maxHours = max(1 / 60, (float) config('session_limits.max_hours', 8));
+        $maxSeconds = (int) ceil($maxHours * 3600);
 
         $tokenKey = 'session:last_activity:' . $token->id;
 
-        $lastActivity = Cache::get($tokenKey);
+        // Si se pierde cache (reinicio/evicción), usamos fallback del token.
+        $lastActivityRaw = Cache::get($tokenKey);
+        if (!$lastActivityRaw) {
+            $fallback = $token->last_used_at ?? $token->created_at;
+            if ($fallback) {
+                $lastActivityRaw = Carbon::parse($fallback)->toDateTimeString();
+                Cache::put($tokenKey, $lastActivityRaw, now()->addSeconds($maxSeconds));
+            }
+        }
 
-        if ($lastActivity) {
-            $lastActivity = Carbon::parse($lastActivity);
-
-            if ($lastActivity->diffInMinutes($now) >= $idleMinutes) {
+        if ($lastActivityRaw) {
+            $lastActivity = Carbon::parse($lastActivityRaw);
+            if ($lastActivity->diffInSeconds($now) >= ($idleMinutes * 60)) {
                 $token->delete();
                 Cache::forget($tokenKey);
 
@@ -54,7 +62,7 @@ class EnsureTokenIsFresh
 
         $createdAt = Carbon::parse($token->created_at);
 
-        if ($createdAt->diffInHours($now) >= $maxHours) {
+        if ($createdAt->diffInSeconds($now) >= $maxSeconds) {
             $token->delete();
             Cache::forget($tokenKey);
 
@@ -73,7 +81,7 @@ class EnsureTokenIsFresh
             ], 401);
         }
 
-        Cache::put($tokenKey, $now->toDateTimeString(), now()->addHours($maxHours));
+        Cache::put($tokenKey, $now->toDateTimeString(), now()->addSeconds($maxSeconds));
 
         return $next($request);
     }

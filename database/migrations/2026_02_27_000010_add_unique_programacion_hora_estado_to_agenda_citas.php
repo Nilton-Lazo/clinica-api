@@ -7,9 +7,11 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::table('agenda_citas', function (Blueprint $table) {
-            $table->dropUnique('agenda_citas_unique_slot');
+        \Illuminate\Support\Facades\DB::statement(
+            'ALTER TABLE agenda_citas DROP CONSTRAINT IF EXISTS agenda_citas_unique_slot'
+        );
 
+        Schema::table('agenda_citas', function (Blueprint $table) {
             $table->unique(
                 ['programacion_medica_id', 'hora', 'estado'],
                 'agenda_citas_prog_hora_estado_unique'

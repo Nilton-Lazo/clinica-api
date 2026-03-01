@@ -44,10 +44,6 @@ class CatalogoPacienteService
         return $this->paisesUncached($filters);
     }
 
-    /**
-     * Lista completa de paises activos para combos (nacionalidad).
-     * Cache 1h; en entornos enterprise se evita paginación en este uso.
-     */
     public function paisesList(): array
     {
         return Cache::remember('admision.catalogos.paises_list', 3600, function () {
@@ -64,9 +60,6 @@ class CatalogoPacienteService
         return $this->ubigeosUncached($filters);
     }
 
-    /**
-     * Primera página de ubigeos para combos del wizard. Cache 1h para respuesta inmediata.
-     */
     public function ubigeosFirstPage(int $perPage = 250): array
     {
         $perPage = max(1, min(500, $perPage));

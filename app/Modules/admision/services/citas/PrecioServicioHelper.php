@@ -4,11 +4,6 @@ namespace App\Modules\admision\services\citas;
 
 use App\Modules\admision\models\ParametroSistema;
 
-/**
- * Calcula precio_sin_igv y precio_con_igv según tipo de tarifa.
- * Particular/Privado: usa precio_sin_igv del servicio.
- * Resto: lógica futura (dejar preparado).
- */
 final class PrecioServicioHelper
 {
     private const TARIFAS_PRECIO_DIRECTO = ['Particular', 'Privado'];
@@ -27,13 +22,6 @@ final class PrecioServicioHelper
         return false;
     }
 
-    /**
-     * @param float $precioBaseSinIgv Precio base sin IGV del servicio (ej. tarifa_servicio.precio_sin_igv)
-     * @param float $cantidad
-     * @param float $descuentoPct 0-100
-     * @param float $aumentoPct 0-100
-     * @return array{precio_sin_igv: float, precio_con_igv: float}
-     */
     public static function calcular(
         float $precioBaseSinIgv,
         float $cantidad,

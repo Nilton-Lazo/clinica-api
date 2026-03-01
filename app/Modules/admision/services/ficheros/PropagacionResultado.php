@@ -4,13 +4,11 @@ namespace App\Modules\admision\services\ficheros;
 
 final class PropagacionResultado
 {
-    /** @var array{tipo: string, tarifa_id: int, tarifa_codigo: string, tarifa_descripcion: string, mensaje: string, codigo_base?: string, codigo_usado?: string}[] */
+
     public array $creados = [];
 
-    /** @var array{tipo: string, tarifa_id: int, tarifa_codigo: string, tarifa_descripcion: string, mensaje: string}[] */
     public array $omitidos = [];
 
-    /** @var array{tipo: string, tarifa_id: int, tarifa_codigo: string, tarifa_descripcion: string, mensaje: string, codigo_base: string, codigo_usado: string}[] */
     public array $creadosConCodigoDiferente = [];
 
     public function toArray(): array

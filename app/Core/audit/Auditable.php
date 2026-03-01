@@ -4,11 +4,6 @@ namespace App\Core\audit;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * Trait para auditoría automática de modelos.
- * Cualquier modelo que use este trait registrará create/update/delete
- * en audit_logs con old_values y new_values, sin depender de llamadas en servicios.
- */
 trait Auditable
 {
     protected static array $defaultAuditExclude = ['password', 'remember_token'];

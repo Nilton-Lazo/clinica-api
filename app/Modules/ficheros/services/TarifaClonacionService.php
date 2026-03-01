@@ -291,6 +291,10 @@ class TarifaClonacionService
                 ]
             );                        
 
+            // Evita resultados stale de la grilla izquierda en Facturación->Tarifario
+            // inmediatamente después de clonar al mismo tarifario.
+            TarifarioCatalogoService::invalidateServiciosCacheForTarifa($targetId);
+
             return $result;
         });
     }

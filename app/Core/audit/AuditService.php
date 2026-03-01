@@ -60,10 +60,6 @@ class AuditService
         ], static fn ($v) => $v !== null));
     }
 
-    /**
-     * Registra un evento de modelo (created/updated/deleted) con old/new values.
-     * Usado por el trait Auditable; no requiere llamadas manuales en servicios.
-     */
     public function logModelEvent(
         string $event,
         Model $model,

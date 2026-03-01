@@ -18,9 +18,6 @@ class CitaAtencionService
 {
     public function __construct(private AuditService $audit) {}
 
-    /**
-     * Datos para el formulario de Atención de cita (solo lectura + planes + atencion existente).
-     */
     public function datosParaAtencion(int $agendaCitaId): array
     {
         $cita = AgendaCita::query()
@@ -189,10 +186,6 @@ class CitaAtencionService
         ];
     }
 
-    /**
-     * Solo actualizar datos editables: paciente (parentesco, titular) y atencion (plan, parentesco, titular).
-     * No genera nro_cuenta ni marca estado_atencion.
-     */
     public function actualizarSoloDatos(int $agendaCitaId, array $data): array
     {
         $cita = AgendaCita::query()->with(['paciente.planes' => function ($q) {
@@ -284,10 +277,6 @@ class CitaAtencionService
         });
     }
 
-    /**
-     * Guardar atención: genera nro_cuenta, crea/actualiza cita_atenciones, actualiza agenda_cita y paciente.
-     * Hora del servidor (configurable por timezone) para hora_asistencia.
-     */
     public function guardarAtencion(int $agendaCitaId, array $data): array
     {
         $cita = AgendaCita::query()->with(['paciente'])->findOrFail($agendaCitaId);
@@ -397,9 +386,6 @@ class CitaAtencionService
         });
     }
 
-    /**
-     * Monto a pagar: si se envía valor válido se usa; si no, se calcula desde servicios (suma precio_con_igv).
-     */
     private function resolveMontoAPagar(?float $montoEnviado, ?array $serviciosInput): float
     {
         if ($montoEnviado !== null && $montoEnviado >= 0) {
@@ -437,9 +423,6 @@ class CitaAtencionService
         return str_pad((string)$nextInt, 10, '0', STR_PAD_LEFT);
     }
 
-    /**
-     * @param array<int, array{tarifa_servicio_id: int, medico_id: int, cop_var?: float, cop_fijo?: float, descuento_pct?: float, aumento_pct?: float, cantidad?: float, precio_sin_igv: float, precio_con_igv: float, estado_facturacion?: string}> $servicios
-     */
     private function syncServicios(CitaAtencion $atencion, array $servicios): void
     {
         CitaAtencionServicio::query()->where('cita_atencion_id', $atencion->id)->delete();
