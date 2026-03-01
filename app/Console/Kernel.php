@@ -12,7 +12,9 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('notifications:prune --days=180 --max-per-user=2000 --purge-technical=1')
+            ->dailyAt('02:00')
+            ->withoutOverlapping();
     }
 
     /**

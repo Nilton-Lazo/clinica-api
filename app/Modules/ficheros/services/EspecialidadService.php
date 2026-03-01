@@ -3,7 +3,6 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
-use App\Core\notifications\NotificationService;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Especialidad;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -14,7 +13,6 @@ class EspecialidadService
 {
     public function __construct(
         private AuditService $audit,
-        private NotificationService $notifications,
     ) {}
 
     private function formatCodigo(int $n): string
@@ -131,13 +129,6 @@ class EspecialidadService
 
             $this->invalidateListCache();
 
-            $this->notifications->notifyAction(
-                entityType: 'especialidad',
-                actionType: 'create',
-                entityId:   $especialidad->id,
-                entityName: $especialidad->descripcion,
-            );
-
             return $especialidad;
         });
     }
@@ -171,13 +162,6 @@ class EspecialidadService
 
             $this->invalidateListCache();
 
-            $this->notifications->notifyAction(
-                entityType: 'especialidad',
-                actionType: 'update',
-                entityId:   $especialidad->id,
-                entityName: $especialidad->descripcion,
-            );
-
             return $especialidad;
         });
     }
@@ -204,13 +188,6 @@ class EspecialidadService
             );
 
             $this->invalidateListCache();
-
-            $this->notifications->notifyAction(
-                entityType: 'especialidad',
-                actionType: 'disable',
-                entityId:   $especialidad->id,
-                entityName: $especialidad->descripcion,
-            );
 
             return $especialidad;
         });
