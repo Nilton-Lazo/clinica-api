@@ -46,6 +46,18 @@ use App\Modules\ficheros\policies\TarifaSubcategoriaPolicy;
 use App\Modules\admision\models\TarifaServicio;
 use App\Modules\ficheros\policies\TarifaServicioPolicy;
 
+use App\Modules\admision\models\TipoEmergencia;
+use App\Modules\ficheros\policies\TipoEmergenciaPolicy;
+
+use App\Modules\admision\models\Topico;
+use App\Modules\ficheros\policies\TopicoPolicy;
+
+use App\Modules\admision\models\TipoDocumento;
+use App\Modules\ficheros\policies\TipoDocumentoPolicy;
+
+use App\Modules\admision\models\DocumentoAtencion;
+use App\Modules\ficheros\policies\DocumentoAtencionPolicy;
+
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\policies\pacientes\PacientePolicy;
 
@@ -70,6 +82,10 @@ class AuthServiceProvider extends ServiceProvider
         TarifaCategoria::class => TarifaCategoriaPolicy::class,
         TarifaSubcategoria::class => TarifaSubcategoriaPolicy::class,
         TarifaServicio::class => TarifaServicioPolicy::class,
+        TipoEmergencia::class => TipoEmergenciaPolicy::class,
+        Topico::class => TopicoPolicy::class,
+        TipoDocumento::class => TipoDocumentoPolicy::class,
+        DocumentoAtencion::class => DocumentoAtencionPolicy::class,
     ];
 
     public function boot(): void

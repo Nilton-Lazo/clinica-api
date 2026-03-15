@@ -548,6 +548,7 @@ class PacienteService
             'ubigeoDomicilio',
             'contactoEmergencia',
             'planes.tipoCliente.iafa',
+            'planes.tipoCliente.tarifa:id,es_precio_directo',
         ]);
     }
 }

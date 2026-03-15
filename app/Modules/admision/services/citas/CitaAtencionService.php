@@ -3,6 +3,7 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\NroCuentaService;
 use App\Core\support\CitaAtencionEstado;
 use App\Core\support\EstadoFacturacionServicio;
 use App\Core\support\RecordStatus;
@@ -16,7 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class CitaAtencionService
 {
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private NroCuentaService $nroCuentaService
+    ) {}
 
     public function datosParaAtencion(int $agendaCitaId): array
     {
@@ -313,7 +317,7 @@ class CitaAtencionService
 
             $nroCuenta = $atencion?->nro_cuenta;
             if ($nroCuenta === null || $nroCuenta === '') {
-                $nroCuenta = $this->nextNroCuenta();
+                $nroCuenta = $this->nroCuentaService->next();
             }
 
             $tarifaId = null;
@@ -403,24 +407,6 @@ class CitaAtencionService
             $sum += (float)($s['precio_con_igv'] ?? 0);
         }
         return round($sum, 4);
-    }
-
-    private function nextNroCuenta(): string
-    {
-        $driver = \Illuminate\Support\Facades\DB::getDriverName();
-        $query = CitaAtencion::query()
-            ->whereNotNull('nro_cuenta')
-            ->where('nro_cuenta', '!=', '');
-
-        if ($driver === 'pgsql') {
-            $query->orderByRaw('CAST(nro_cuenta AS INTEGER) DESC');
-        } else {
-            $query->orderByRaw('CAST(nro_cuenta AS UNSIGNED) DESC');
-        }
-
-        $last = $query->value('nro_cuenta');
-        $nextInt = $last !== null ? (int)$last + 1 : 1;
-        return str_pad((string)$nextInt, 10, '0', STR_PAD_LEFT);
     }
 
     private function syncServicios(CitaAtencion $atencion, array $servicios): void

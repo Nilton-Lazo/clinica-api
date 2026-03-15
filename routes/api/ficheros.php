@@ -16,6 +16,10 @@ use App\Modules\ficheros\controllers\TarifaSubcategoriaController;
 use App\Modules\ficheros\controllers\TarifaServicioController;
 use App\Modules\ficheros\controllers\ParametroSistemaController;
 use App\Modules\ficheros\controllers\TarifaRecargoNocheController;
+use App\Modules\ficheros\controllers\TipoEmergenciaController;
+use App\Modules\ficheros\controllers\TopicoController;
+use App\Modules\ficheros\controllers\TipoDocumentoController;
+use App\Modules\ficheros\controllers\DocumentoAtencionController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -108,4 +112,27 @@ Route::prefix('ficheros')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
 
     Route::get('parametros/igv', [ParametroSistemaController::class, 'getIgv'])->middleware('throttle:api');
     Route::put('parametros/igv', [ParametroSistemaController::class, 'updateIgv'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/emergencia/tipo', [TipoEmergenciaController::class, 'index'])->middleware('throttle:api');
+    Route::get('parametros/emergencia/tipo/next-codigo', [TipoEmergenciaController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('parametros/emergencia/tipo', [TipoEmergenciaController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/emergencia/tipo/{tipoEmergencia}', [TipoEmergenciaController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/emergencia/tipo/{tipoEmergencia}/desactivar', [TipoEmergenciaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/emergencia/topico', [TopicoController::class, 'index'])->middleware('throttle:api');
+    Route::get('parametros/emergencia/topico/next-codigo', [TopicoController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('parametros/emergencia/topico', [TopicoController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/emergencia/topico/{topico}', [TopicoController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/emergencia/topico/{topico}/desactivar', [TopicoController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/emergencia/tipo-documento', [TipoDocumentoController::class, 'index'])->middleware('throttle:api');
+    Route::get('parametros/emergencia/tipo-documento/next-codigo', [TipoDocumentoController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('parametros/emergencia/tipo-documento', [TipoDocumentoController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/emergencia/tipo-documento/{tipoDocumento}', [TipoDocumentoController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/emergencia/tipo-documento/{tipoDocumento}/desactivar', [TipoDocumentoController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/emergencia/documento-atencion', [DocumentoAtencionController::class, 'index'])->middleware('throttle:api');
+    Route::post('parametros/emergencia/documento-atencion', [DocumentoAtencionController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/emergencia/documento-atencion/{documentoAtencion}', [DocumentoAtencionController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/emergencia/documento-atencion/{documentoAtencion}/desactivar', [DocumentoAtencionController::class, 'deactivate'])->middleware('throttle:sensitive-write');
 });
