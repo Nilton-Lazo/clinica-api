@@ -43,7 +43,7 @@ class TarifaRecargoNocheService
         $horaDesde = $data['hora_desde'] ?? '19:00';
         $horaHasta = $data['hora_hasta'] ?? $this->horaDesdeMas12($horaDesde);
 
-        return TarifaRecargoNoche::create([
+        $recargo = TarifaRecargoNoche::create([
             'tarifa_id' => $tarifa->id,
             'tarifa_categoria_id' => (int)$data['tarifa_categoria_id'],
             'porcentaje' => (float)$data['porcentaje'],
@@ -53,6 +53,10 @@ class TarifaRecargoNocheService
                 ? $data['estado']
                 : RecordStatus::ACTIVO->value,
         ]);
+
+        TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int)$tarifa->id);
+
+        return $recargo;
     }
 
     public function update(TarifaRecargoNoche $recargo, array $data): TarifaRecargoNoche
@@ -70,6 +74,9 @@ class TarifaRecargoNocheService
             $recargo->estado = $data['estado'];
         }
         $recargo->save();
+
+        TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int)$recargo->tarifa_id);
+
         return $recargo->fresh(['tarifaCategoria']);
     }
 
@@ -77,6 +84,9 @@ class TarifaRecargoNocheService
     {
         $recargo->estado = RecordStatus::INACTIVO->value;
         $recargo->save();
+
+        TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int)$recargo->tarifa_id);
+
         return $recargo->fresh(['tarifaCategoria']);
     }
 
