@@ -20,6 +20,7 @@ use App\Modules\ficheros\controllers\TipoEmergenciaController;
 use App\Modules\ficheros\controllers\TopicoController;
 use App\Modules\ficheros\controllers\TipoDocumentoController;
 use App\Modules\ficheros\controllers\DocumentoAtencionController;
+use App\Modules\ficheros\controllers\ServicioDefaultEmergenciaController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -135,4 +136,7 @@ Route::prefix('ficheros')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
     Route::post('parametros/emergencia/documento-atencion', [DocumentoAtencionController::class, 'store'])->middleware('throttle:sensitive-write');
     Route::put('parametros/emergencia/documento-atencion/{documentoAtencion}', [DocumentoAtencionController::class, 'update'])->middleware('throttle:sensitive-write');
     Route::patch('parametros/emergencia/documento-atencion/{documentoAtencion}/desactivar', [DocumentoAtencionController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/emergencia/servicios-defaults/tarifa/{tarifaId}', [ServicioDefaultEmergenciaController::class, 'show'])->middleware('throttle:api');
+    Route::put('parametros/emergencia/servicios-defaults/tarifa/{tarifaId}', [ServicioDefaultEmergenciaController::class, 'update'])->middleware('throttle:sensitive-write');
 });
