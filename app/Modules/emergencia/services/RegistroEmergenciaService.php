@@ -65,9 +65,7 @@ class RegistroEmergenciaService
                 'fecha_hasta' => $fechaHasta,
             ]);
 
-            // Transform to include computed patient data
             $paginator->getCollection()->transform(function ($registro) {
-                // Find patient to compute age
                 $paciente = \App\Modules\admision\models\Paciente::query()
                     ->select(['id', 'fecha_nacimiento', 'sexo'])
                     ->where(function ($q) use ($registro) {
@@ -137,8 +135,7 @@ class RegistroEmergenciaService
     public function update(array $data, int $id): RegistroEmergencia
     {
         $record = RegistroEmergencia::query()->findOrFail($id);
-        
-        // Allowed fields for update
+
         $record->fill([
             'orden' => $data['orden'] ?? $record->orden,
             'hora' => $data['hora'] ?? $record->hora,
@@ -151,14 +148,12 @@ class RegistroEmergenciaService
             'medico_emergencia' => $data['medico_emergencia'] ?? $record->medico_emergencia,
             'medico_especialista' => $data['medico_especialista'] ?? $record->medico_especialista,
             'topico' => $data['topico'] ?? $record->topico,
-            
-            // New fields
+
             'tipo_emergencia_id' => $data['tipo_emergencia_id'] ?? $record->tipo_emergencia_id,
             'topico_id' => $data['topico_id'] ?? $record->topico_id,
             'medico_emergencia_id' => $data['medico_emergencia_id'] ?? $record->medico_emergencia_id,
             'diagnostico_ingreso' => $data['diagnostico_ingreso'] ?? $record->diagnostico_ingreso,
-            
-            // SOAT
+
             'soat_activo' => $data['soat_activo'] ?? $record->soat_activo,
             'soat_tipo_documento_id' => $data['soat_tipo_documento_id'] ?? $record->soat_tipo_documento_id,
             'soat_numero_documento' => $data['soat_numero_documento'] ?? $record->soat_numero_documento,
@@ -180,10 +175,10 @@ class RegistroEmergenciaService
             'soat_documento_atencion_id_2' => $data['soat_documento_atencion_id_2'] ?? $record->soat_documento_atencion_id_2,
             'soat_numero_documento_atencion_2' => $data['soat_numero_documento_atencion_2'] ?? $record->soat_numero_documento_atencion_2,
         ]);
-        
+
         $record->save();
         Cache::increment(self::CACHE_VERSION_KEY);
-        
+
         return $record;
     }
 

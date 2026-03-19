@@ -37,13 +37,24 @@ class RegistroEmergenciaController extends Controller
 
     public function show(int $id)
     {
-        $record = RegistroEmergencia::query()->with(['tipoEmergencia'])->findOrFail($id);
-        $paciente = Paciente::query()
-            ->where('numero_documento', $record->numero_hc)
-            ->orWhere('nr', $record->numero_hc)
-            ->first();
+        $record = RegistroEmergencia::query()
+            ->with(['tipoEmergencia'])
+            ->findOrFail($id);
 
-        $record->setAttribute('paciente', $paciente ? $paciente->toArray() : null);
+        try {
+            $hc = trim((string) ($record->numero_hc ?? ''));
+            $paciente = $hc === ''
+                ? null
+                : Paciente::query()
+                    ->where(function ($q) use ($hc) {
+                        $q->where('numero_documento', $hc)
+                            ->orWhere('nr', $hc);
+                    })
+                    ->first();
+            $record->setAttribute('paciente', $paciente ? $paciente->toArray() : null);
+        } catch (\Throwable $e) {
+            $record->setAttribute('paciente', null);
+        }
 
         return response()->json(['data' => $record]);
     }
