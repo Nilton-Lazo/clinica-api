@@ -1,0 +1,188 @@
+<?php
+
+namespace App\Modules\ficheros\services;
+
+use App\Core\audit\AuditService;
+use App\Core\support\RecordStatus;
+use App\Modules\admision\models\Cliente;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+
+class ClienteService
+{
+    public function __construct(private AuditService $audit) {}
+
+    private function formatCodigo(int $n): string
+    {
+        if ($n < 1000) {
+            return str_pad((string) $n, 3, '0', STR_PAD_LEFT);
+        }
+
+        return (string) $n;
+    }
+
+    private function nextCodigoInt(): int
+    {
+        $last = Cliente::query()
+            ->select('codigo')
+            ->orderByRaw('CAST(codigo AS INTEGER) DESC')
+            ->value('codigo');
+
+        $lastInt = $last !== null ? (int) $last : 0;
+
+        return $lastInt + 1;
+    }
+
+    public function previewNextCodigo(): string
+    {
+        return $this->formatCodigo($this->nextCodigoInt());
+    }
+
+    private const INDEX_CACHE_TTL_SECONDS = 30;
+
+    private const CACHE_VERSION_KEY = 'ficheros:clientes:version';
+
+    private function getListCacheVersion(): int
+    {
+        return (int) Cache::get(self::CACHE_VERSION_KEY, 0);
+    }
+
+    private function invalidateListCache(): void
+    {
+        Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
+    }
+
+    public function paginate(array $filters): LengthAwarePaginator
+    {
+        $perPage = (int) ($filters['per_page'] ?? 50);
+        $perPage = max(1, min(100, $perPage));
+        $page = max(1, (int) ($filters['page'] ?? 1));
+
+        $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
+        $status = isset($filters['status']) ? trim((string) $filters['status']) : null;
+
+        $version = $this->getListCacheVersion();
+        $cacheKey = sprintf('ficheros:clientes:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
+            $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
+            $status = isset($filters['status']) ? trim((string) $filters['status']) : null;
+
+            $query = Cliente::query();
+
+            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
+                $query->where('estado', $status);
+            }
+
+            if ($q !== null && $q !== '') {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('codigo', 'ilike', "%{$q}%")
+                        ->orWhere('nombre', 'ilike', "%{$q}%")
+                        ->orWhere('dni_o_ruc', 'ilike', "%{$q}%")
+                        ->orWhere('telefono', 'ilike', "%{$q}%")
+                        ->orWhere('direccion', 'ilike', "%{$q}%");
+                });
+            }
+
+            return $query
+                ->orderByRaw('CAST(codigo AS INTEGER) ASC')
+                ->paginate($perPage, ['*'], 'page', $page)
+                ->appends([
+                    'per_page' => $perPage,
+                    'q' => $q,
+                    'status' => $status,
+                ]);
+        });
+    }
+
+    public function create(array $data): Cliente
+    {
+        return DB::transaction(function () use ($data) {
+            DB::statement('LOCK TABLE clientes IN EXCLUSIVE MODE');
+
+            $codigo = $this->formatCodigo($this->nextCodigoInt());
+
+            $cliente = Cliente::create([
+                'codigo' => $codigo,
+                'tipo' => $data['tipo'],
+                'nombre' => $data['nombre'],
+                'dni_o_ruc' => $data['dni_o_ruc'],
+                'telefono' => $data['telefono'] ?? null,
+                'direccion' => $data['direccion'] ?? null,
+                'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
+            ]);
+
+            $this->audit->log(
+                'masterdata.ficheros.clientes.create',
+                'Crear cliente',
+                'cliente',
+                (string) $cliente->id,
+                $cliente->only(['codigo', 'tipo', 'nombre', 'dni_o_ruc', 'telefono', 'direccion', 'estado']),
+                'success',
+                201
+            );
+
+            $this->invalidateListCache();
+
+            return $cliente;
+        });
+    }
+
+    public function update(Cliente $cliente, array $data): Cliente
+    {
+        return DB::transaction(function () use ($cliente, $data) {
+            $before = $cliente->only(['tipo', 'nombre', 'dni_o_ruc', 'telefono', 'direccion', 'estado']);
+
+            $cliente->fill([
+                'tipo' => $data['tipo'],
+                'nombre' => $data['nombre'],
+                'dni_o_ruc' => $data['dni_o_ruc'],
+                'telefono' => $data['telefono'] ?? null,
+                'direccion' => $data['direccion'] ?? null,
+                'estado' => $data['estado'],
+            ]);
+            $cliente->save();
+
+            $after = $cliente->only(['tipo', 'nombre', 'dni_o_ruc', 'telefono', 'direccion', 'estado']);
+
+            $this->audit->log(
+                'masterdata.ficheros.clientes.update',
+                'Actualizar cliente',
+                'cliente',
+                (string) $cliente->id,
+                ['before' => $before, 'after' => $after],
+                'success',
+                200
+            );
+
+            $this->invalidateListCache();
+
+            return $cliente;
+        });
+    }
+
+    public function deactivate(Cliente $cliente): Cliente
+    {
+        return DB::transaction(function () use ($cliente) {
+            $before = $cliente->only(['estado']);
+
+            $cliente->estado = RecordStatus::INACTIVO->value;
+            $cliente->save();
+
+            $this->audit->log(
+                'masterdata.ficheros.clientes.deactivate',
+                'Desactivar cliente',
+                'cliente',
+                (string) $cliente->id,
+                ['before' => $before, 'after' => $cliente->only(['estado'])],
+                'success',
+                200
+            );
+
+            $this->invalidateListCache();
+
+            return $cliente;
+        });
+    }
+}

@@ -7,6 +7,8 @@ use App\Modules\seguridad\Policies\UserPolicy;
 
 use App\Modules\admision\models\Especialidad;
 use App\Modules\ficheros\policies\EspecialidadPolicy;
+use App\Modules\admision\models\Cirugia;
+use App\Modules\ficheros\policies\CirugiaPolicy;
 
 use App\Modules\admision\models\Consultorio;
 use App\Modules\ficheros\policies\ConsultorioPolicy;
@@ -30,6 +32,12 @@ use App\Modules\ficheros\policies\IafaPolicy;
 
 use App\Modules\admision\models\Contratante;
 use App\Modules\ficheros\policies\ContratantePolicy;
+
+use App\Modules\admision\models\Cliente;
+use App\Modules\ficheros\policies\ClientePolicy;
+
+use App\Modules\admision\models\Paquete;
+use App\Modules\ficheros\policies\PaquetePolicy;
 
 use App\Modules\admision\models\Tarifa;
 use App\Modules\ficheros\policies\TarifaPolicy;
@@ -68,6 +76,7 @@ class AuthServiceProvider extends ServiceProvider
     protected $policies = [
         User::class => UserPolicy::class,
         Especialidad::class => EspecialidadPolicy::class,
+        Cirugia::class => CirugiaPolicy::class,
         Consultorio::class => ConsultorioPolicy::class,
         Medico::class => MedicoPolicy::class,
         Turno::class => TurnoPolicy::class,
@@ -76,6 +85,8 @@ class AuthServiceProvider extends ServiceProvider
         TipoIafa::class => TipoIafaPolicy::class,
         Iafa::class => IafaPolicy::class,
         Contratante::class => ContratantePolicy::class,
+        Cliente::class => ClientePolicy::class,
+        Paquete::class => PaquetePolicy::class,
         Tarifa::class => TarifaPolicy::class,
         TipoCliente::class => TipoClientePolicy::class,
         Paciente::class => PacientePolicy::class,

@@ -183,6 +183,7 @@ class AuditMiddleware
 
         $map = [
             'Especialidad' => 'especialidad',
+            'Cirugia' => 'cirugia',
             'Consultorio' => 'consultorio',
             'Medico' => 'medico',
             'Turno' => 'turno',
@@ -190,6 +191,8 @@ class AuditMiddleware
             'Iafa' => 'iafa',
             'TipoCliente' => 'tipo_cliente',
             'Contratante' => 'contratante',
+            'Cliente' => 'cliente',
+            'Paquete' => 'paquete',
             'Tarifa' => 'tarifa',
             'TarifaCategoria' => 'tarifa_categoria',
             'TarifaSubcategoria' => 'tarifa_subcategoria',
@@ -228,6 +231,7 @@ class AuditMiddleware
             'medico',
             'consultorio',
             'especialidad',
+            'cirugia',
             'turno',
             'tipoIafa',
             'iafa',

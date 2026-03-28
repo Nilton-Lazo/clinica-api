@@ -10,6 +10,7 @@ class NotificationService
 
     private const ENTITY_LABELS = [
         'especialidad'         => 'Especialidad',
+        'cirugia'              => 'Cirugía',
         'consultorio'          => 'Consultorio',
         'medico'               => 'Médico',
         'turno'                => 'Turno',

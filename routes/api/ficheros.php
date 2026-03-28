@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\ficheros\controllers\EspecialidadController;
+use App\Modules\ficheros\controllers\CirugiaController;
 use App\Modules\ficheros\controllers\ConsultorioController;
 use App\Modules\ficheros\controllers\MedicoController;
 use App\Modules\ficheros\controllers\TurnoController;
@@ -21,6 +22,9 @@ use App\Modules\ficheros\controllers\TopicoController;
 use App\Modules\ficheros\controllers\TipoDocumentoController;
 use App\Modules\ficheros\controllers\DocumentoAtencionController;
 use App\Modules\ficheros\controllers\ServicioDefaultEmergenciaController;
+use App\Modules\ficheros\controllers\ClienteController;
+use App\Modules\ficheros\controllers\PaqueteController;
+use App\Modules\ficheros\controllers\PaqueteServicioController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +34,12 @@ Route::prefix('ficheros')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
     Route::post('especialidades', [EspecialidadController::class, 'store'])->middleware('throttle:sensitive-write');
     Route::put('especialidades/{especialidad}', [EspecialidadController::class, 'update'])->middleware('throttle:sensitive-write');
     Route::patch('especialidades/{especialidad}/desactivar', [EspecialidadController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('cirugias', [CirugiaController::class, 'index'])->middleware('throttle:api');
+    Route::get('cirugias/next-codigo', [CirugiaController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('cirugias', [CirugiaController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('cirugias/{cirugia}', [CirugiaController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('cirugias/{cirugia}/desactivar', [CirugiaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
 
     Route::get('consultorios', [ConsultorioController::class, 'index'])->middleware('throttle:api');
     Route::post('consultorios', [ConsultorioController::class, 'store'])->middleware('throttle:sensitive-write');
@@ -47,6 +57,22 @@ Route::prefix('ficheros')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
     Route::post('turnos', [TurnoController::class, 'store'])->middleware('throttle:sensitive-write');
     Route::put('turnos/{turno}', [TurnoController::class, 'update'])->middleware('throttle:sensitive-write');
     Route::patch('turnos/{turno}/desactivar', [TurnoController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('clientes', [ClienteController::class, 'index'])->middleware('throttle:api');
+    Route::get('clientes/next-codigo', [ClienteController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('clientes', [ClienteController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('clientes/{cliente}', [ClienteController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('clientes/{cliente}/desactivar', [ClienteController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('paquetes', [PaqueteController::class, 'index'])->middleware('throttle:api');
+    Route::get('paquetes/next-codigo', [PaqueteController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('paquetes', [PaqueteController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('paquetes/{paquete}', [PaqueteController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('paquetes/{paquete}/desactivar', [PaqueteController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+    Route::get('tarifas/{tarifa}/paquetes', [PaqueteServicioController::class, 'paquetesPorTarifa'])->middleware('throttle:api');
+    Route::get('tarifas/{tarifa}/arbol-servicios', [PaqueteServicioController::class, 'arbolPorTarifa'])->middleware('throttle:api');
+    Route::get('paquetes/{paquete}/servicios', [PaqueteServicioController::class, 'serviciosPorPaquete'])->middleware('throttle:api');
+    Route::put('paquetes/{paquete}/servicios/sync', [PaqueteServicioController::class, 'syncServicios'])->middleware('throttle:sensitive-write');
 
     Route::get('tipos-iafas', [TipoIafaController::class, 'index'])->middleware('throttle:api');
     Route::get('tipos-iafas/next-codigo', [TipoIafaController::class, 'nextCodigo'])->middleware('throttle:api');
