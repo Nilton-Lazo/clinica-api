@@ -3,6 +3,7 @@
 use App\Modules\admision\controllers\citas\ProgramacionMedicaController;
 use App\Modules\admision\controllers\citas\AgendaMedicaController;
 use App\Modules\admision\controllers\citas\CitaAtencionController;
+use App\Modules\admision\controllers\citas\PresupuestoController;
 use App\Modules\admision\controllers\catalogos\CatalogoPacienteController;
 use App\Modules\admision\controllers\pacientes\PacienteController;
 
@@ -22,6 +23,10 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::get('agenda-medica/slots', [AgendaMedicaController::class, 'slots'])->middleware('throttle:agenda-api');
         Route::get('agenda-medica', [AgendaMedicaController::class, 'index'])->middleware('throttle:agenda-api');
         Route::post('agenda-medica', [AgendaMedicaController::class, 'store'])->middleware('throttle:sensitive-write');
+        Route::get('presupuestos/next-codigo', [PresupuestoController::class, 'nextCodigo'])->middleware('throttle:api');
+        Route::get('presupuestos/{id}', [PresupuestoController::class, 'show'])->whereNumber('id')->middleware('throttle:api');
+        Route::get('presupuestos', [PresupuestoController::class, 'index'])->middleware('throttle:api');
+        Route::post('presupuestos', [PresupuestoController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::patch('agenda-medica/{id}/anular', [AgendaMedicaController::class, 'anular'])->middleware('throttle:sensitive-write');
         Route::get('agenda-medica/{id}/atencion', [CitaAtencionController::class, 'show'])->middleware('throttle:agenda-api');
         Route::post('agenda-medica/{id}/atencion', [CitaAtencionController::class, 'store'])->middleware('throttle:sensitive-write');

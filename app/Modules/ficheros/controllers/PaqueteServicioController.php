@@ -35,7 +35,7 @@ class PaqueteServicioController extends Controller
 
         return response()->json([
             'data' => [
-                'paquete' => $paquete->only(['id', 'codigo', 'descripcion', 'tarifa_id']),
+                'paquete' => $paquete->only(['id', 'codigo', 'descripcion', 'tarifa_id', 'precio_sin_igv']),
                 'servicios' => $servicios,
             ],
         ]);

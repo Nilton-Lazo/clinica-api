@@ -20,7 +20,7 @@ class PaqueteServicioService
             ->where('tarifa_id', $tarifa->id)
             ->where('estado', RecordStatus::ACTIVO->value)
             ->orderByRaw('CAST(codigo AS INTEGER) ASC')
-            ->get(['id', 'codigo', 'descripcion', 'tarifa_id', 'estado']);
+            ->get(['id', 'codigo', 'descripcion', 'tarifa_id', 'estado', 'precio_sin_igv']);
     }
 
     public function arbolServiciosPorTarifa(Tarifa $tarifa): array
