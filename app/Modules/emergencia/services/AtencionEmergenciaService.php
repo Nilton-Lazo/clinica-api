@@ -8,6 +8,7 @@ use App\Core\support\EstadoFacturacionServicio;
 use App\Modules\admision\models\RegistroEmergenciaServicio;
 use App\Modules\admision\models\RegistroEmergencia;
 use App\Modules\admision\models\Paciente;
+use App\Modules\admision\services\citas\CuentaSyncService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -15,7 +16,8 @@ class AtencionEmergenciaService
 {
     public function __construct(
         private AuditService $audit,
-        private NroCuentaService $nroCuentaService
+        private NroCuentaService $nroCuentaService,
+        private CuentaSyncService $cuentaSyncService,
     ) {}
 
     public function datosParaAtencion(int $registroId): array
@@ -162,8 +164,10 @@ class AtencionEmergenciaService
             $registro->titular_nombre = $titularNombre ?: null;
             $registro->monto_a_pagar = $this->resolveMontoAPagar($montoAPagar, $serviciosInput);
             
-            $registro->estado = 'ATENDIDO'; // Based on how emergence state is tracked
+            $registro->estado = 'ATENDIDO';
             $registro->save();
+
+            $this->cuentaSyncService->syncFromRegistroEmergencia($registro->fresh());
 
             if (is_array($serviciosInput)) {
                 $this->syncServicios($registro, $serviciosInput);

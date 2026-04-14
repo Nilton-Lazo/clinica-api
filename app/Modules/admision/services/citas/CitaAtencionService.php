@@ -19,7 +19,8 @@ class CitaAtencionService
 {
     public function __construct(
         private AuditService $audit,
-        private NroCuentaService $nroCuentaService
+        private NroCuentaService $nroCuentaService,
+        private CuentaSyncService $cuentaSyncService,
     ) {}
 
     public function datosParaAtencion(int $agendaCitaId): array
@@ -277,6 +278,15 @@ class CitaAtencionService
                 200
             );
 
+            if ($atencion) {
+                $atencion->refresh();
+                $cita->refresh();
+                $nc = trim((string) ($atencion->nro_cuenta ?? ''));
+                if ($nc !== '') {
+                    $this->cuentaSyncService->syncFromCitaAtencion($atencion, $cita);
+                }
+            }
+
             return $this->datosParaAtencion((int)$cita->id);
         });
     }
@@ -385,6 +395,10 @@ class CitaAtencionService
                 'success',
                 200
             );
+
+            $atencion->refresh();
+            $cita->refresh();
+            $this->cuentaSyncService->syncFromCitaAtencion($atencion, $cita);
 
             return $this->datosParaAtencion((int)$cita->id);
         });

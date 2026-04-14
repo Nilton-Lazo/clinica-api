@@ -3,6 +3,9 @@
 use App\Modules\admision\controllers\citas\ProgramacionMedicaController;
 use App\Modules\admision\controllers\citas\AgendaMedicaController;
 use App\Modules\admision\controllers\citas\CitaAtencionController;
+use App\Modules\admision\controllers\citas\CuentaBitacoraNotaController;
+use App\Modules\admision\controllers\citas\CuentaCitaController;
+use App\Modules\admision\controllers\citas\PreFacturacionHospitalariaController;
 use App\Modules\admision\controllers\citas\PresupuestoController;
 use App\Modules\admision\controllers\catalogos\CatalogoPacienteController;
 use App\Modules\admision\controllers\pacientes\PacienteController;
@@ -10,6 +13,12 @@ use App\Modules\admision\controllers\pacientes\PacienteController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])->group(function () {
+    Route::post('pre-facturacion-hospitalaria/registros', [PreFacturacionHospitalariaController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::get('cuentas-cita', [CuentaCitaController::class, 'index'])->middleware('throttle:api');
+    Route::get('cuentas/{nroCuenta}/bitacora-notas', [CuentaBitacoraNotaController::class, 'index'])->where('nroCuenta', '[0-9]+')->middleware('throttle:api');
+    Route::post('cuentas/{nroCuenta}/bitacora-notas', [CuentaBitacoraNotaController::class, 'store'])->where('nroCuenta', '[0-9]+')->middleware('throttle:sensitive-write');
+    Route::get('cuentas/{nroCuenta}', [CuentaCitaController::class, 'show'])->where('nroCuenta', '[0-9]+')->middleware('throttle:api');
+
     Route::prefix('citas')->group(function () {
         Route::get('programacion-medica', [ProgramacionMedicaController::class, 'index'])->middleware('throttle:api');
         Route::get('programacion-medica/next-codigo', [ProgramacionMedicaController::class, 'nextCodigo'])->middleware('throttle:api');
@@ -41,6 +50,8 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
 
     Route::prefix('pacientes')->group(function () {
         Route::get('', [PacienteController::class, 'index'])->middleware('throttle:api');
+        Route::get('{paciente}/bitacora-notas', [CuentaBitacoraNotaController::class, 'indexByPaciente'])->middleware('throttle:api');
+        Route::post('{paciente}/bitacora-notas', [CuentaBitacoraNotaController::class, 'storeByPaciente'])->middleware('throttle:sensitive-write');
         Route::get('{paciente}', [PacienteController::class, 'show'])->middleware('throttle:api');
     
         Route::post('', [PacienteController::class, 'store'])->middleware('throttle:sensitive-write');

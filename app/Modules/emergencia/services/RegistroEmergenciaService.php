@@ -4,13 +4,17 @@ namespace App\Modules\emergencia\services;
 
 use App\Core\NroCuentaService;
 use App\Modules\admision\models\RegistroEmergencia;
+use App\Modules\admision\services\citas\CuentaSyncService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 
 class RegistroEmergenciaService
 {
-    public function __construct(private NroCuentaService $nroCuentaService) {}
+    public function __construct(
+        private NroCuentaService $nroCuentaService,
+        private CuentaSyncService $cuentaSyncService,
+    ) {}
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
     private const CACHE_VERSION_KEY = 'emergencia:registro:version';
@@ -129,6 +133,8 @@ class RegistroEmergenciaService
             'soat_numero_documento_atencion_2' => $data['soat_numero_documento_atencion_2'] ?? null,
         ]);
         Cache::increment(self::CACHE_VERSION_KEY);
+        $this->cuentaSyncService->syncFromRegistroEmergencia($record);
+
         return $record;
     }
 
@@ -178,6 +184,7 @@ class RegistroEmergenciaService
 
         $record->save();
         Cache::increment(self::CACHE_VERSION_KEY);
+        $this->cuentaSyncService->syncFromRegistroEmergencia($record->fresh());
 
         return $record;
     }
