@@ -22,6 +22,12 @@ use App\Modules\ficheros\controllers\TopicoController;
 use App\Modules\ficheros\controllers\TipoDocumentoController;
 use App\Modules\ficheros\controllers\DocumentoAtencionController;
 use App\Modules\ficheros\controllers\ServicioDefaultEmergenciaController;
+use App\Modules\ficheros\controllers\AreaJefaturaController;
+use App\Modules\ficheros\controllers\CajaTipoDocumentoController;
+use App\Modules\ficheros\controllers\CajaNumeracionComprobanteController;
+use App\Modules\ficheros\controllers\CajaFormaPagoController;
+use App\Modules\ficheros\controllers\CajaMedioPagoController;
+use App\Modules\ficheros\controllers\CajaBancoTarjetaController;
 use App\Modules\ficheros\controllers\ClienteController;
 use App\Modules\ficheros\controllers\PaqueteController;
 use App\Modules\ficheros\controllers\PaqueteServicioController;
@@ -165,4 +171,40 @@ Route::prefix('ficheros')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
 
     Route::get('parametros/emergencia/servicios-defaults/tarifa/{tarifaId}', [ServicioDefaultEmergenciaController::class, 'show'])->middleware('throttle:api');
     Route::put('parametros/emergencia/servicios-defaults/tarifa/{tarifaId}', [ServicioDefaultEmergenciaController::class, 'update'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/caja/area-jefatura', [AreaJefaturaController::class, 'index'])->middleware('throttle:api');
+    Route::get('parametros/caja/area-jefatura/next-codigo', [AreaJefaturaController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('parametros/caja/area-jefatura', [AreaJefaturaController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/caja/area-jefatura/{areaJefatura}', [AreaJefaturaController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/caja/area-jefatura/{areaJefatura}/desactivar', [AreaJefaturaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/caja/tipo-documento', [CajaTipoDocumentoController::class, 'index'])->middleware('throttle:api');
+    Route::get('parametros/caja/tipo-documento/next-codigo', [CajaTipoDocumentoController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('parametros/caja/tipo-documento', [CajaTipoDocumentoController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/caja/tipo-documento/{cajaTipoDocumento}', [CajaTipoDocumentoController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/caja/tipo-documento/{cajaTipoDocumento}/desactivar', [CajaTipoDocumentoController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/caja/numeracion-comprobante', [CajaNumeracionComprobanteController::class, 'index'])->middleware('throttle:api');
+    Route::post('parametros/caja/numeracion-comprobante', [CajaNumeracionComprobanteController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/caja/numeracion-comprobante/{cajaNumeracionComprobante}', [CajaNumeracionComprobanteController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/caja/numeracion-comprobante/{cajaNumeracionComprobante}/desactivar', [CajaNumeracionComprobanteController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/caja/forma-pago', [CajaFormaPagoController::class, 'index'])->middleware('throttle:api');
+    Route::get('parametros/caja/forma-pago/next-codigo', [CajaFormaPagoController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('parametros/caja/forma-pago', [CajaFormaPagoController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/caja/forma-pago/{cajaFormaPago}', [CajaFormaPagoController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/caja/forma-pago/{cajaFormaPago}/desactivar', [CajaFormaPagoController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/caja/medio-pago', [CajaMedioPagoController::class, 'index'])->middleware('throttle:api');
+    Route::get('parametros/caja/medio-pago/next-codigo', [CajaMedioPagoController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('parametros/caja/medio-pago', [CajaMedioPagoController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/caja/medio-pago/{cajaMedioPago}', [CajaMedioPagoController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/caja/medio-pago/{cajaMedioPago}/desactivar', [CajaMedioPagoController::class, 'deactivate'])->middleware('throttle:sensitive-write');
+
+    Route::get('parametros/caja/banco-tarjeta', [CajaBancoTarjetaController::class, 'index'])->middleware('throttle:api');
+    Route::get('parametros/caja/banco-tarjeta/medios-disponibles', [CajaBancoTarjetaController::class, 'mediosDisponibles'])->middleware('throttle:api');
+    Route::get('parametros/caja/banco-tarjeta/next-codigo', [CajaBancoTarjetaController::class, 'nextCodigo'])->middleware('throttle:api');
+    Route::post('parametros/caja/banco-tarjeta', [CajaBancoTarjetaController::class, 'store'])->middleware('throttle:sensitive-write');
+    Route::put('parametros/caja/banco-tarjeta/{cajaBancoTarjeta}', [CajaBancoTarjetaController::class, 'update'])->middleware('throttle:sensitive-write');
+    Route::patch('parametros/caja/banco-tarjeta/{cajaBancoTarjeta}/desactivar', [CajaBancoTarjetaController::class, 'deactivate'])->middleware('throttle:sensitive-write');
 });

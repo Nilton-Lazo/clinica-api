@@ -65,6 +65,20 @@ use App\Modules\ficheros\policies\TipoDocumentoPolicy;
 
 use App\Modules\admision\models\DocumentoAtencion;
 use App\Modules\ficheros\policies\DocumentoAtencionPolicy;
+use App\Modules\caja\models\CajaApertura;
+use App\Modules\caja\policies\CajaAperturaPolicy;
+use App\Modules\admision\models\AreaJefatura;
+use App\Modules\ficheros\policies\AreaJefaturaPolicy;
+use App\Modules\admision\models\CajaTipoDocumento;
+use App\Modules\ficheros\policies\CajaTipoDocumentoPolicy;
+use App\Modules\admision\models\CajaNumeracionComprobante;
+use App\Modules\ficheros\policies\CajaNumeracionComprobantePolicy;
+use App\Modules\admision\models\CajaFormaPago;
+use App\Modules\ficheros\policies\CajaFormaPagoPolicy;
+use App\Modules\admision\models\CajaMedioPago;
+use App\Modules\ficheros\policies\CajaMedioPagoPolicy;
+use App\Modules\admision\models\CajaBancoTarjeta;
+use App\Modules\ficheros\policies\CajaBancoTarjetaPolicy;
 
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\policies\pacientes\PacientePolicy;
@@ -97,6 +111,13 @@ class AuthServiceProvider extends ServiceProvider
         Topico::class => TopicoPolicy::class,
         TipoDocumento::class => TipoDocumentoPolicy::class,
         DocumentoAtencion::class => DocumentoAtencionPolicy::class,
+        AreaJefatura::class => AreaJefaturaPolicy::class,
+        CajaTipoDocumento::class => CajaTipoDocumentoPolicy::class,
+        CajaNumeracionComprobante::class => CajaNumeracionComprobantePolicy::class,
+        CajaFormaPago::class => CajaFormaPagoPolicy::class,
+        CajaMedioPago::class => CajaMedioPagoPolicy::class,
+        CajaBancoTarjeta::class => CajaBancoTarjetaPolicy::class,
+        CajaApertura::class => CajaAperturaPolicy::class,
     ];
 
     public function boot(): void

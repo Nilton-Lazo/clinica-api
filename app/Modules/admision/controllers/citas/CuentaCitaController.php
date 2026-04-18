@@ -26,7 +26,7 @@ class CuentaCitaController extends Controller
     {
         $this->authorize('viewAny', AgendaCita::class);
 
-        $p = $this->service->paginate($request->only(['q', 'per_page', 'page']));
+        $p = $this->service->paginate($request->only(['q', 'per_page', 'page', 'emision_origen']));
 
         $items = [];
         foreach ($p->items() as $row) {
@@ -41,12 +41,13 @@ class CuentaCitaController extends Controller
             $items[] = [
                 'nro_cuenta' => (string) $row->nro_cuenta,
                 'origen' => (string) $row->origen,
+                'origen_sigla' => $this->origenSigla((string) $row->origen),
                 'origen_id' => (int) $row->origen_id,
                 'nr' => $row->nr !== null && $row->nr !== '' ? (string) $row->nr : null,
                 'hc' => $row->hc !== null && $row->hc !== '' ? (string) $row->hc : null,
                 'apellidos_nombres' => trim((string) ($row->paciente_nombre ?? '')),
                 'fecha' => $fechaStr,
-                'estado' => $row->estado !== null ? (string) $row->estado : '',
+                'estado' => $this->estadoListado($row->estado !== null ? (string) $row->estado : ''),
                 'paciente_id' => $row->paciente_id !== null ? (int) $row->paciente_id : null,
                 'paciente_plan_id' => $row->paciente_plan_id !== null ? (int) $row->paciente_plan_id : null,
             ];
@@ -121,5 +122,29 @@ class CuentaCitaController extends Controller
             'tarifa_id' => $cuenta->tarifa_id !== null ? (int) $cuenta->tarifa_id : null,
             'estado' => $cuenta->estado !== null ? (string) $cuenta->estado : '',
         ];
+    }
+
+    private function origenSigla(string $origen): string
+    {
+        return match ($origen) {
+            CuentaOrigen::CITA_ATENCION->value => 'AMB',
+            CuentaOrigen::REGISTRO_EMERGENCIA->value => 'EM',
+            CuentaOrigen::PRE_FACTURACION_HOSPITALARIA->value => 'HOS',
+            default => $origen,
+        };
+    }
+
+    private function estadoListado(string $estado): string
+    {
+        $v = strtoupper(trim($estado));
+        if ($v === '') {
+            return '';
+        }
+
+        return match ($v) {
+            'ACTIVO' => 'REGISTRADO',
+            'CANCELADO_LISTO_PARA_FACTURAR' => 'CANCELADO_LISTO_PARA_FACTURAR',
+            default => $v,
+        };
     }
 }

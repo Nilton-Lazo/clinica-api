@@ -2,6 +2,7 @@
 
 namespace App\Modules\admision\services\citas;
 
+use App\Core\support\ComprobanteEmisionCuentaOrigenFilter;
 use App\Modules\admision\models\Cuenta;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,20 @@ class CuentaCitaService
 
         $q = isset($filters['q']) ? trim((string) $filters['q']) : '';
 
+        $emisionOrigen = isset($filters['emision_origen']) ? trim((string) $filters['emision_origen']) : '';
+        $cuentaOrigines = $emisionOrigen !== ''
+            ? ComprobanteEmisionCuentaOrigenFilter::cuentaOriginesFor($emisionOrigen)
+            : null;
+
         $query = Cuenta::query()->orderByDesc('fecha')->orderByDesc('id');
+
+        if (is_array($cuentaOrigines)) {
+            if ($cuentaOrigines === []) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('cuentas.origen', $cuentaOrigines);
+            }
+        }
 
         if ($q !== '') {
             $driver = DB::getDriverName();

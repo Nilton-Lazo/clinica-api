@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 
 require __DIR__ . '/api/login.php';
+require __DIR__ . '/api/system.php';
 require __DIR__ . '/api/seguridad.php';
 require __DIR__ . '/api/telemetria.php';
 require __DIR__ . '/api/admision.php';
@@ -10,3 +11,4 @@ require __DIR__ . '/api/ficheros.php';
 require __DIR__ . '/api/emergencia.php';
 require __DIR__ . '/api/facturacion.php';
 require __DIR__ . '/api/notifications.php';
+require __DIR__ . '/api/caja.php';
