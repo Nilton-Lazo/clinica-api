@@ -18,10 +18,6 @@ class PreFacturacionHospitalariaService
         private CuentaBitacoraNotaService $bitacoraNotaService,
     ) {}
 
-    /**
-     * @param  array<string, mixed>  $form
-     * @return array{nro_cuenta: string}
-     */
     public function guardarRegistro(int $pacienteId, int $pacientePlanId, ?string $nroCuentaExistente, array $form): array
     {
         $lineas = $form['lineas'] ?? [];
@@ -32,7 +28,7 @@ class PreFacturacionHospitalariaService
         $tienePaquete = is_array($paquete) && ($paquete['id'] ?? null) !== null;
         if (count($lineas) < 1 && ! $tienePaquete) {
             throw ValidationException::withMessages([
-                'form.lineas' => ['Incluya servicios en la grilla o seleccione un paquete.'],
+                'form.lineas' => ['Incluye al menos un servicio en la grilla o selecciona un paquete para guardar la pre-facturación hospitalaria.'],
             ]);
         }
 
@@ -81,10 +77,10 @@ class PreFacturacionHospitalariaService
             if ($nroTrim !== '') {
                 $cuenta = Cuenta::query()->where('nro_cuenta', $nroTrim)->firstOrFail();
                 if ($cuenta->origen !== CuentaOrigen::PRE_FACTURACION_HOSPITALARIA->value) {
-                    throw ValidationException::withMessages(['nro_cuenta' => ['Esta cuenta no admite actualización desde pre-facturación hospitalaria.']]);
+                    throw ValidationException::withMessages(['nro_cuenta' => ['Esta cuenta pertenece a otro flujo y no puede actualizarse desde pre-facturación hospitalaria.']]);
                 }
                 if ((int) $cuenta->paciente_id !== $pacienteId) {
-                    throw ValidationException::withMessages(['paciente_id' => ['El paciente no coincide con la cuenta.']]);
+                    throw ValidationException::withMessages(['paciente_id' => ['El paciente seleccionado no coincide con el paciente asociado a la cuenta.']]);
                 }
 
                 $registro = PreFacturacionHospitalariaRegistro::query()

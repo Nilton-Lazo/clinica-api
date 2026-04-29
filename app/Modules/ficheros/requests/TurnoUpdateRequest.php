@@ -31,6 +31,25 @@ class TurnoUpdateRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.prohibited' => 'El código del turno lo genera el sistema; no lo modifiques manualmente.',
+            'duracion_minutos.prohibited' => 'La duración del turno se calcula automáticamente con la hora de inicio y fin.',
+            'hora_inicio.required' => 'Ingresa la hora de inicio del turno.',
+            'hora_inicio.date_format' => 'La hora de inicio debe tener formato HH:MM.',
+            'hora_fin.required' => 'Ingresa la hora de fin del turno.',
+            'hora_fin.date_format' => 'La hora de fin debe tener formato HH:MM.',
+            'tipo_turno.required' => 'Selecciona el tipo de turno.',
+            'tipo_turno.in' => 'Selecciona un tipo de turno válido.',
+            'jornada.required' => 'Selecciona la jornada del turno.',
+            'jornada.in' => 'Selecciona una jornada válida para el turno.',
+            'estado.required' => 'Selecciona el estado del turno.',
+            'estado.in' => 'El estado del turno debe ser ACTIVO o INACTIVO.',
+            'descripcion.max' => 'La descripción del turno no debe superar 255 caracteres.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if ($this->has('tipo_turno')) {

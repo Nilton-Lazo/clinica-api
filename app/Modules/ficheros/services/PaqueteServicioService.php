@@ -141,7 +141,7 @@ class PaqueteServicioService
 
         if ($valid !== $inputSorted) {
             throw ValidationException::withMessages([
-                'servicio_ids' => ['Uno o más servicios no pertenecen a la tarifa del paquete.'],
+                'servicio_ids' => ['Uno o más servicios seleccionados no pertenecen a la tarifa del paquete o ya no están activos. Actualiza la pantalla e intenta otra vez.'],
             ]);
         }
 

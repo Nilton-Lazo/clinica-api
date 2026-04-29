@@ -40,6 +40,34 @@ class IafaStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.prohibited' => 'El código de la IAFAS lo genera el sistema; no lo envíes manualmente.',
+            'tipo_iafa_id.required' => 'Selecciona el tipo de IAFAS.',
+            'tipo_iafa_id.integer' => 'Selecciona un tipo de IAFAS válido.',
+            'tipo_iafa_id.exists' => 'El tipo de IAFAS seleccionado no existe o está inactivo.',
+            'razon_social.required' => 'Ingresa la razón social de la IAFAS.',
+            'razon_social.string' => 'La razón social de la IAFAS debe ser texto.',
+            'razon_social.max' => 'La razón social de la IAFAS no debe superar 255 caracteres.',
+            'descripcion_corta.required' => 'Ingresa la descripción corta de la IAFAS.',
+            'descripcion_corta.string' => 'La descripción corta de la IAFAS debe ser texto.',
+            'descripcion_corta.max' => 'La descripción corta de la IAFAS no debe superar 120 caracteres.',
+            'ruc.required' => 'Ingresa el RUC de la IAFAS.',
+            'ruc.regex' => 'El RUC de la IAFAS debe tener 11 dígitos numéricos.',
+            'direccion.max' => 'La dirección de la IAFAS no debe superar 255 caracteres.',
+            'representante_legal.max' => 'El representante legal de la IAFAS no debe superar 150 caracteres.',
+            'telefono.max' => 'El teléfono de la IAFAS no debe superar 30 caracteres.',
+            'pagina_web.max' => 'La página web de la IAFAS no debe superar 200 caracteres.',
+            'fecha_inicio_cobertura.required' => 'Ingresa la fecha de inicio de cobertura de la IAFAS.',
+            'fecha_inicio_cobertura.date' => 'La fecha de inicio de cobertura de la IAFAS no tiene un formato válido.',
+            'fecha_fin_cobertura.required' => 'Ingresa la fecha de fin de cobertura de la IAFAS.',
+            'fecha_fin_cobertura.date' => 'La fecha de fin de cobertura de la IAFAS no tiene un formato válido.',
+            'fecha_fin_cobertura.after_or_equal' => 'La fecha de fin de cobertura no puede ser anterior a la fecha de inicio.',
+            'estado.in' => 'El estado de la IAFAS debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         $this->merge([

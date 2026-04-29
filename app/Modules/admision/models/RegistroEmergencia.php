@@ -28,7 +28,6 @@ class RegistroEmergencia extends Model
         'topico',
         'numero_cuenta',
         'estado',
-        // New fields
         'tipo_emergencia_id',
         'topico_id',
         'medico_emergencia_id',

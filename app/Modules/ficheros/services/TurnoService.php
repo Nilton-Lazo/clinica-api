@@ -240,7 +240,7 @@ class TurnoService
         $min = $hi->diffInMinutes($hf);
 
         if ($min <= 0 || $min > (24 * 60)) {
-            throw ValidationException::withMessages(['hora_fin' => ['Rango de horas inválido.']]);
+            throw ValidationException::withMessages(['hora_fin' => ['La hora de fin debe generar una duración válida, mayor a 0 y no superior a 24 horas.']]);
         }
 
         return [$min, $hi->format('H:i'), $hf->format('H:i')];

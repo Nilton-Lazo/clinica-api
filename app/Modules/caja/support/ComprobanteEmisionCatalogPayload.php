@@ -8,9 +8,6 @@ use App\Modules\admision\models\CajaTipoDocumento;
 
 final class ComprobanteEmisionCatalogPayload
 {
-    /**
-     * @return list<string>
-     */
     private static function codigosTiposDocumentoEmision(): array
     {
         $raw = config('caja.emision_tipos_documento_codigos', ['001', '002', '005']);

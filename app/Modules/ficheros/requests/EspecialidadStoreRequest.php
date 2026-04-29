@@ -21,6 +21,16 @@ class EspecialidadStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'descripcion.required' => 'Ingresa la descripción de la especialidad.',
+            'descripcion.string' => 'La descripción de la especialidad debe ser texto.',
+            'descripcion.max' => 'La descripción de la especialidad no debe superar 255 caracteres.',
+            'estado.in' => 'El estado de la especialidad debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

@@ -216,7 +216,7 @@ class AgendaMedicaService
         $programacion = $this->resolveProgramacion($fecha, $especialidadId, $medicoId);
         if (!$programacion) {
             throw ValidationException::withMessages([
-                'programacion' => ['No existe programación médica para esa fecha.'],
+                'programacion' => ['No existe programación médica activa para la fecha, especialidad y médico seleccionados.'],
             ]);
         }
 
@@ -266,7 +266,7 @@ class AgendaMedicaService
             ->findOrFail((int)$data['programacion_medica_id']);
 
         if ($programacion->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['programacion_medica_id' => ['La programación debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['programacion_medica_id' => ['La programación médica seleccionada debe estar activa para agendar citas.']]);
         }
 
         $hora = trim((string)$data['hora']);
@@ -285,21 +285,21 @@ class AgendaMedicaService
         $adicionalRemaining = array_values(array_diff($slots['adicional'], $taken));
 
         if (in_array($hora, $slots['adicional'], true) && count($baseRemaining) > 0) {
-            throw ValidationException::withMessages(['hora' => ['Debe agotar los cupos base antes de usar adicionales.']]);
+            throw ValidationException::withMessages(['hora' => ['Primero debes agotar los cupos base antes de usar horarios adicionales.']]);
         }
 
         if (in_array($hora, $slots['extra'], true) && (count($baseRemaining) > 0 || count($adicionalRemaining) > 0)) {
-            throw ValidationException::withMessages(['hora' => ['Debe agotar los adicionales antes de usar extras.']]);
+            throw ValidationException::withMessages(['hora' => ['Primero debes agotar los horarios adicionales antes de usar horarios extra.']]);
         }
 
         if (!in_array($hora, $allowed, true)) {
-            throw ValidationException::withMessages(['hora' => ['La hora seleccionada no pertenece a la programación.']]);
+            throw ValidationException::withMessages(['hora' => ['La hora seleccionada no pertenece a la programación médica del médico y fecha elegidos.']]);
         }
 
         $exists = in_array($hora, $taken, true);
 
         if ($exists) {
-            throw ValidationException::withMessages(['hora' => ['La hora seleccionada ya está ocupada.']]);
+            throw ValidationException::withMessages(['hora' => ['La hora seleccionada ya está ocupada por otra cita activa.']]);
         }
 
         $paciente = Paciente::query()->with(['planes.tipoCliente'])->findOrFail((int)$data['paciente_id']);
@@ -315,7 +315,7 @@ class AgendaMedicaService
                 ->all();
 
             if (!in_array($iafaId, $iafas, true)) {
-                throw ValidationException::withMessages(['iafa_id' => ['La IAFAS no corresponde al paciente.']]);
+                throw ValidationException::withMessages(['iafa_id' => ['La IAFAS seleccionada no corresponde a un plan activo del paciente.']]);
             }
         }
 
@@ -368,7 +368,7 @@ class AgendaMedicaService
         } catch (QueryException $e) {
             if ((string)$e->getCode() === '23000') {
                 throw ValidationException::withMessages([
-                    'hora' => ['La hora seleccionada ya está ocupada.'],
+                    'hora' => ['La hora seleccionada ya fue tomada por otra cita mientras se procesaba el registro.'],
                 ]);
             }
 
@@ -401,21 +401,21 @@ class AgendaMedicaService
         $tppRaw = (int)($medico->tiempo_promedio_por_paciente ?? 0);
         if ($tppRaw <= 0) {
             throw ValidationException::withMessages([
-                'tiempo_promedio_por_paciente' => ['El médico no tiene tiempo promedio por paciente válido.'],
+                'tiempo_promedio_por_paciente' => ['El médico seleccionado no tiene un tiempo promedio por paciente válido para construir horarios.'],
             ]);
         }
 
         $cupos = (int)$programacion->cupos;
         if ($cupos <= 0) {
             throw ValidationException::withMessages([
-                'cupos' => ['La programación no tiene cupos válidos.'],
+                'cupos' => ['La programación médica seleccionada no tiene cupos válidos para agendar citas.'],
             ]);
         }
 
         $horaInicio = $turno->hora_inicio ? substr((string)$turno->hora_inicio, 0, 5) : '';
         if (trim($horaInicio) === '') {
             throw ValidationException::withMessages([
-                'turno_id' => ['El turno no tiene hora de inicio válida.'],
+                'turno_id' => ['El turno de la programación médica no tiene una hora de inicio válida.'],
             ]);
         }
 
@@ -428,7 +428,7 @@ class AgendaMedicaService
             $start = Carbon::createFromFormat('Y-m-d H:i', $fecha . ' ' . $horaInicio);
         } catch (\Throwable $e) {
             throw ValidationException::withMessages([
-                'fecha' => ['La fecha/hora de programación no es válida.'],
+                'fecha' => ['La fecha y hora de la programación médica no son válidas para construir horarios.'],
             ]);
         }
 
@@ -474,7 +474,7 @@ class AgendaMedicaService
 
         if ($cita->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'cita' => ['La cita ya está anulada o no está activa.'],
+                'cita' => ['La cita ya está anulada o no está activa; no se puede liberar nuevamente.'],
             ]);
         }
 

@@ -99,7 +99,7 @@ class TarifaRecargoNocheService
         }
         if ($tarifa->estado !== \App\Core\support\RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['El tarifario debe estar ACTIVO.'],
+                'tarifa_id' => ['El tarifario seleccionado debe estar activo para configurar recargo nocturno.'],
             ]);
         }
     }

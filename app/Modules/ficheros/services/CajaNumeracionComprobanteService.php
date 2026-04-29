@@ -34,19 +34,21 @@ class CajaNumeracionComprobanteService
         return str_pad((string) max(1, min(9_999_999, $numero)), 7, '0', STR_PAD_LEFT);
     }
 
-    private function enrichRow(CajaNumeracionComprobante $row): array
+    private function enrichRow(CajaNumeracionComprobante $row, ?int $numeroOverride = null): array
     {
         $tipo = $row->tipoDocumento;
+        $numero = $numeroOverride ?? (int) $row->numero;
+        $numeroFmt = $this->numeroFormateado($numero);
         return [
             'id' => $row->id,
             'tipo_documento_id' => $row->tipo_documento_id,
             'tipo_documento_codigo' => (string) ($tipo?->codigo ?? ''),
             'tipo_documento_descripcion' => (string) ($tipo?->descripcion ?? ''),
             'serie' => (string) $row->serie,
-            'numero' => (int) $row->numero,
-            'numero_formateado' => $this->numeroFormateado((int) $row->numero),
+            'numero' => $numero,
+            'numero_formateado' => $numeroFmt,
             'codigo' => (string) $row->serie,
-            'descripcion' => trim(((string) ($tipo?->descripcion ?? '')).' · '.$this->numeroFormateado((int) $row->numero)),
+            'descripcion' => trim(((string) ($tipo?->descripcion ?? '')).' · '.$numeroFmt),
             'estado' => (string) $row->estado,
             'created_at' => $row->created_at?->toISOString(),
             'updated_at' => $row->updated_at?->toISOString(),
@@ -104,6 +106,14 @@ class CajaNumeracionComprobanteService
 
         $rows = CajaNumeracionComprobante::query()
             ->with('tipoDocumento')
+            ->leftJoin(
+                'caja_numeracion_comprobante_correlativos as cnc',
+                'cnc.numeracion_comprobante_id',
+                '=',
+                'caja_numeraciones_comprobante.id'
+            )
+            ->addSelect('caja_numeraciones_comprobante.*')
+            ->addSelect(DB::raw('COALESCE(cnc.next_numero, caja_numeraciones_comprobante.numero) as emision_numero'))
             ->where('estado', RecordStatus::ACTIVO->value)
             ->orderBy('serie')
             ->orderBy('numero')
@@ -112,7 +122,7 @@ class CajaNumeracionComprobanteService
 
         $out = [];
         foreach ($rows as $row) {
-            $out[] = $this->enrichRow($row);
+            $out[] = $this->enrichRow($row, (int) ($row->emision_numero ?? $row->numero));
         }
 
         return $out;

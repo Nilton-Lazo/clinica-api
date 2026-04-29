@@ -46,15 +46,15 @@ class PaqueteService
         $tarifa = Tarifa::query()->find($tarifaId);
 
         if (! $tarifa) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Tarifa no existe.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La tarifa seleccionada no existe o ya no está disponible.']]);
         }
 
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Tarifa debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La tarifa seleccionada debe estar activa para registrar paquetes.']]);
         }
 
         if ($tarifa->tarifa_base) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Seleccione una tarifa operativa (no la tarifa base).']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['Selecciona una tarifa operativa; la tarifa base no permite registrar paquetes.']]);
         }
 
         return $tarifa;

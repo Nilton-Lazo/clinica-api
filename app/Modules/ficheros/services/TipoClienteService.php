@@ -100,20 +100,20 @@ class TipoClienteService
         $tarifa = Tarifa::query()->find($tarifaId);
 
         if (!$tarifa) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Tarifa no existe.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La tarifa seleccionada no existe o ya no está disponible.']]);
         }
 
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Tarifa debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La tarifa seleccionada debe estar activa para crear tipos de cliente.']]);
         }
 
         if ($tarifa->iafa_id === null) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Esta Tarifa no tiene IAFAS asociada y no puede usarse para Tipos de cliente.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La tarifa seleccionada no tiene IAFAS asociada y no puede usarse para tipos de cliente.']]);
         }
 
         $iafa = Iafa::query()->find($tarifa->iafa_id);
         if (!$iafa || $iafa->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['tarifa_id' => ['La IAFAS asociada a la Tarifa debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La IAFAS asociada a la tarifa debe existir y estar activa para crear tipos de cliente.']]);
         }
 
         return $tarifa;
@@ -124,11 +124,11 @@ class TipoClienteService
         $c = Contratante::query()->find($contratanteId);
 
         if (!$c) {
-            throw ValidationException::withMessages(['contratante_id' => ['Contratante no existe.']]);
+            throw ValidationException::withMessages(['contratante_id' => ['El contratante seleccionado no existe o ya no está disponible.']]);
         }
 
         if ($c->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['contratante_id' => ['Contratante debe estar ACTIVO.']]);
+            throw ValidationException::withMessages(['contratante_id' => ['El contratante seleccionado debe estar activo para crear tipos de cliente.']]);
         }
 
         return $c;
@@ -142,11 +142,11 @@ class TipoClienteService
         $desc = $left . '/' . $right;
 
         if ($left === '' || $right === '') {
-            throw ValidationException::withMessages(['descripcion_tipo_cliente' => ['No se pudo generar la descripción (faltan valores).']]);
+            throw ValidationException::withMessages(['descripcion_tipo_cliente' => ['No se pudo generar la descripción del tipo de cliente porque faltan datos del contratante o la tarifa.']]);
         }
 
         if (mb_strlen($desc) > 255) {
-            throw ValidationException::withMessages(['descripcion_tipo_cliente' => ['La descripción autogenerada supera 255 caracteres.']]);
+            throw ValidationException::withMessages(['descripcion_tipo_cliente' => ['La descripción generada con contratante y tarifa supera 255 caracteres. Reduce alguno de esos nombres.']]);
         }
 
         return $desc;

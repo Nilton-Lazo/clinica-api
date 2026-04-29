@@ -106,15 +106,17 @@ class ReporteIngresosCajaService
         ];
     }
 
-    /**
-     * @return array{movimientos: list<array<string, mixed>>, totales_por_medio: array<string, string>, totales_documento: array<string, string>, total_general: string}
-     */
     public function movimientos(User $actor, int $cajaAperturaId, ?string $numeracionId): array
     {
-        $a = CajaApertura::query()->whereKey($cajaAperturaId)->firstOrFail();
+        $a = CajaApertura::query()->whereKey($cajaAperturaId)->first();
+        if (! $a) {
+            throw ValidationException::withMessages([
+                'caja_apertura_id' => ['La apertura seleccionada no existe. Actualiza el reporte y selecciona otra apertura.'],
+            ]);
+        }
         if ((int) $a->user_recepciona_id !== (int) $actor->id) {
             throw ValidationException::withMessages([
-                'caja_apertura_id' => ['No tienes acceso a esta apertura.'],
+                'caja_apertura_id' => ['No tienes acceso a esta apertura de caja. Selecciona una apertura propia.'],
             ]);
         }
 
@@ -134,11 +136,16 @@ class ReporteIngresosCajaService
             $form = isset($snap['form']) && is_array($snap['form']) ? $snap['form'] : [];
             $labels = isset($snap['labels']) && is_array($snap['labels']) ? $snap['labels'] : [];
 
-            if ($numeracionId !== null && $numeracionId !== '' && (string) ($form['numeracionId'] ?? '') !== (string) $numeracionId) {
+            $emisionNumeracionId = $e->numeracion_comprobante_id !== null
+                ? (string) $e->numeracion_comprobante_id
+                : (string) ($form['numeracionId'] ?? '');
+            if ($numeracionId !== null && $numeracionId !== '' && $emisionNumeracionId !== (string) $numeracionId) {
                 continue;
             }
 
-            $total = $this->totalDesdeSnapshot($snap);
+            $total = $e->total_paciente !== null
+                ? (float) $e->total_paciente
+                : $this->totalDesdeSnapshot($snap);
             $medioId = (int) ($form['medioPagoId'] ?? 0);
             if ($medioId > 0) {
                 $key = (string) $medioId;
@@ -162,13 +169,18 @@ class ReporteIngresosCajaService
                 $primerServicio = $tsId > 0 ? 'Servicio #'.$tsId : '—';
             }
 
+            $numeroComprobante = (string) ($form['correlativo'] ?? '');
+            if ($e->numero_emitido !== null) {
+                $numeroComprobante = str_pad((string) $e->numero_emitido, 7, '0', STR_PAD_LEFT);
+            }
+
             $movimientos[] = [
                 'id' => (string) $e->id,
                 'cuenta' => (string) $e->nro_cuenta,
                 'paciente' => (string) ($form['paciente'] ?? ''),
                 'medico_servicio' => $primerServicio,
                 'tipo_comprobante' => (string) ($labels['tipo_comprobante'] ?? ''),
-                'num_comprobante' => (string) ($form['correlativo'] ?? ''),
+                'num_comprobante' => $numeroComprobante,
                 'total' => number_format($total, 2, '.', ''),
                 'cuenta_pago' => (string) ($e->numero_operacion ?? ''),
                 'estado' => (string) ($labels['estado_emision'] ?? (string) ($form['estadoEmision'] ?? '')),
@@ -199,9 +211,6 @@ class ReporteIngresosCajaService
         ];
     }
 
-    /**
-     * @param  array<string, mixed>  $snap
-     */
     private function totalDesdeSnapshot(array $snap): float
     {
         $lineas = $snap['servicios_lineas'] ?? [];

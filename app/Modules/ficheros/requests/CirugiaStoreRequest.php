@@ -21,6 +21,15 @@ class CirugiaStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'descripcion.required' => 'Ingresa la descripción de la cirugía.',
+            'descripcion.max' => 'La descripción de la cirugía no debe superar 255 caracteres.',
+            'estado.in' => 'Selecciona un estado válido para la cirugía.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (! $this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

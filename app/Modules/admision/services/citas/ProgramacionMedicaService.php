@@ -75,17 +75,17 @@ class ProgramacionMedicaService
         $tpp = (int)($medico->tiempo_promedio_por_paciente ?? 0);
 
         if ($dur <= 0) {
-            throw ValidationException::withMessages(['turno_id' => ['El turno no tiene duración válida.']]);
+            throw ValidationException::withMessages(['turno_id' => ['El turno seleccionado no tiene una duración válida para calcular cupos.']]);
         }
 
         if ($tpp <= 0) {
-            throw ValidationException::withMessages(['medico_id' => ['El médico no tiene tiempo promedio por paciente válido.']]);
+            throw ValidationException::withMessages(['medico_id' => ['El médico seleccionado no tiene un tiempo promedio por paciente válido.']]);
         }
 
         $cupos = intdiv($dur, $tpp);
 
         if ($cupos < 1) {
-            throw ValidationException::withMessages(['cupos' => ['Con esos valores no se puede generar al menos 1 cupo.']]);
+            throw ValidationException::withMessages(['cupos' => ['Con la duración del turno y el tiempo promedio del médico no se puede generar al menos un cupo.']]);
         }
 
         return [
@@ -100,13 +100,13 @@ class ProgramacionMedicaService
         $fechas = $this->expandirFechas($data);
 
         if (count($fechas) > 370) {
-            throw ValidationException::withMessages(['fechas' => ['El rango/lista de fechas es demasiado grande.']]);
+            throw ValidationException::withMessages(['fechas' => ['La programación médica no puede generarse para más de 370 fechas a la vez.']]);
         }
 
         $medico = Medico::query()->findOrFail((int)$data['medico_id']);
 
         if ((int)$medico->especialidad_id !== (int)$data['especialidad_id']) {
-            throw ValidationException::withMessages(['medico_id' => ['El médico no corresponde a la especialidad seleccionada.']]);
+            throw ValidationException::withMessages(['medico_id' => ['El médico seleccionado no corresponde a la especialidad elegida.']]);
         }
 
         $cuposInfo = $this->calcularCupos((int)$data['medico_id'], (int)$data['turno_id']);
@@ -187,7 +187,7 @@ class ProgramacionMedicaService
         $medico = Medico::query()->findOrFail((int)$data['medico_id']);
 
         if ((int)$medico->especialidad_id !== (int)$data['especialidad_id']) {
-            throw ValidationException::withMessages(['medico_id' => ['El médico no corresponde a la especialidad seleccionada.']]);
+            throw ValidationException::withMessages(['medico_id' => ['El médico seleccionado no corresponde a la especialidad elegida.']]);
         }
 
         $cuposInfo = $this->calcularCupos((int)$data['medico_id'], (int)$data['turno_id']);
@@ -324,7 +324,7 @@ class ProgramacionMedicaService
             return $out;
         }
 
-        throw ValidationException::withMessages(['modalidad_fechas' => ['Modalidad inválida.']]);
+        throw ValidationException::withMessages(['modalidad_fechas' => ['La modalidad de fechas seleccionada no es válida para programación médica.']]);
     }
 
     private function applySearch(Builder $query, string $q): void

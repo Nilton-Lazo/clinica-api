@@ -23,6 +23,23 @@ class CajaNumeracionComprobanteUpdateRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'tipo_documento_id.required' => 'Selecciona el tipo de documento para la numeración.',
+            'tipo_documento_id.integer' => 'Selecciona un tipo de documento válido.',
+            'tipo_documento_id.exists' => 'El tipo de documento seleccionado no existe o está inactivo.',
+            'serie.required' => 'Ingresa la serie de la numeración.',
+            'serie.max' => 'La serie no debe superar 20 caracteres.',
+            'numero.required' => 'Ingresa el número inicial de la numeración.',
+            'numero.integer' => 'El número inicial debe ser un valor entero.',
+            'numero.min' => 'El número inicial debe ser mayor o igual a 1.',
+            'numero.max' => 'El número inicial no debe superar 9999999.',
+            'estado.required' => 'Selecciona el estado de la numeración de comprobante.',
+            'estado.in' => 'Selecciona un estado válido para la numeración de comprobante.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         $serie = strtoupper(trim((string) $this->input('serie', '')));

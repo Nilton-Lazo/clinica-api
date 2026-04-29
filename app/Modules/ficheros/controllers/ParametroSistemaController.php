@@ -20,6 +20,11 @@ class ParametroSistemaController extends Controller
     {
         $valid = $request->validate([
             'igv_porcentaje' => 'required|numeric|min:0|max:100',
+        ], [
+            'igv_porcentaje.required' => 'Ingresa el porcentaje de IGV.',
+            'igv_porcentaje.numeric' => 'El porcentaje de IGV debe ser numérico.',
+            'igv_porcentaje.min' => 'El porcentaje de IGV no puede ser menor a 0.',
+            'igv_porcentaje.max' => 'El porcentaje de IGV no puede superar 100.',
         ]);
 
         ParametroSistema::setValor(

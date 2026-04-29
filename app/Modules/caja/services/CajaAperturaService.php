@@ -37,7 +37,9 @@ class CajaAperturaService
         }
 
         if ($next > self::CODIGO_MAX) {
-            throw new \RuntimeException('No hay códigos de apertura disponibles.');
+            throw ValidationException::withMessages([
+                'codigo' => ['No hay códigos de apertura disponibles para crear una nueva caja.'],
+            ]);
         }
 
         return str_pad((string) $next, 10, '0', STR_PAD_LEFT);
@@ -64,19 +66,32 @@ class CajaAperturaService
 
             if ($alreadyOpened) {
                 throw ValidationException::withMessages([
-                    'tipo' => 'Ya tienes una caja '.strtolower($tipo).' aperturada. Debes cerrarla antes de abrir otra.',
+                    'tipo' => ['Ya tienes una caja '.strtolower($tipo).' aperturada. Debes cerrarla antes de abrir otra.'],
                 ]);
             }
 
             $codigo = $this->allocateNextCodigoSerial();
 
-            User::query()->whereKey($data['user_entrega_id'])->where('estado', 'activo')->firstOrFail();
+            $entregaExists = User::query()
+                ->whereKey($data['user_entrega_id'])
+                ->where('estado', 'activo')
+                ->exists();
+            if (! $entregaExists) {
+                throw ValidationException::withMessages([
+                    'user_entrega_id' => ['El personal que entrega no existe o no está activo. Selecciona otro usuario.'],
+                ]);
+            }
             $recepciona = $actor;
 
-            AreaJefatura::query()
+            $areaExists = AreaJefatura::query()
                 ->whereKey($data['area_jefatura_id'])
                 ->where('estado', 'ACTIVO')
-                ->firstOrFail();
+                ->exists();
+            if (! $areaExists) {
+                throw ValidationException::withMessages([
+                    'area_jefatura_id' => ['El área o jefatura seleccionada no existe o no está activa. Selecciona otra opción.'],
+                ]);
+            }
 
             $row = CajaApertura::create([
                 'codigo' => $codigo,
@@ -126,7 +141,7 @@ class CajaAperturaService
 
             if (!$open) {
                 throw ValidationException::withMessages([
-                    'tipo' => 'No tienes una caja '.strtolower($tipo).' aperturada para cerrar.',
+                    'tipo' => ['No tienes una caja '.strtolower($tipo).' aperturada para cerrar.'],
                 ]);
             }
 

@@ -8,6 +8,7 @@ use App\Core\support\EstadoFacturacionServicio;
 use App\Modules\admision\models\RegistroEmergenciaServicio;
 use App\Modules\admision\models\RegistroEmergencia;
 use App\Modules\admision\models\Paciente;
+use App\Core\support\RecordStatus;
 use App\Modules\admision\services\citas\CuentaSyncService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -130,6 +131,24 @@ class AtencionEmergenciaService
         $serviciosInput = $data['servicios'] ?? null;
         $montoAPagar = isset($data['monto_a_pagar']) ? (float)$data['monto_a_pagar'] : null;
 
+        if (!$paciente) {
+            throw ValidationException::withMessages([
+                'numero_hc' => ['No se encontró el paciente del registro de emergencia. Regresa al registro y selecciona nuevamente al paciente.'],
+            ]);
+        }
+
+        if (!$pacientePlanId) {
+            throw ValidationException::withMessages([
+                'paciente_plan_id' => ['Selecciona el tipo de cliente del paciente antes de guardar la atención de emergencia.'],
+            ]);
+        }
+
+        if (!is_array($serviciosInput) || count($serviciosInput) === 0) {
+            throw ValidationException::withMessages([
+                'servicios' => ['Agrega al menos un servicio final antes de guardar la atención de emergencia.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($registro, $paciente, $acudio, $horaAsistenciaRequest, $pacientePlanId, $parentescoSeguro, $titularNombre, $serviciosInput, $montoAPagar) {
             $nroCuenta = $registro->numero_cuenta;
             if ($nroCuenta === null || $nroCuenta === '') {
@@ -137,11 +156,23 @@ class AtencionEmergenciaService
             }
 
             $tarifaId = null;
-            if ($pacientePlanId && $paciente) {
-                $plan = $paciente->planes()->with('tipoCliente:id,iafa_id,tarifa_id')->where('id', $pacientePlanId)->first();
-                if ($plan && $plan->tipoCliente) {
-                    $tarifaId = (int)$plan->tipoCliente->tarifa_id;
-                }
+            $plan = $paciente->planes()
+                ->with('tipoCliente:id,iafa_id,tarifa_id')
+                ->where('id', $pacientePlanId)
+                ->where('estado', RecordStatus::ACTIVO->value)
+                ->first();
+
+            if (!$plan || !$plan->tipoCliente) {
+                throw ValidationException::withMessages([
+                    'paciente_plan_id' => ['El tipo de cliente seleccionado no pertenece al paciente o ya no está activo. Selecciona un plan vigente.'],
+                ]);
+            }
+
+            $tarifaId = (int)$plan->tipoCliente->tarifa_id;
+            if ($tarifaId <= 0) {
+                throw ValidationException::withMessages([
+                    'paciente_plan_id' => ['El tipo de cliente seleccionado no tiene una tarifa configurada para registrar la atención de emergencia.'],
+                ]);
             }
 
             $horaAsistencia = null;

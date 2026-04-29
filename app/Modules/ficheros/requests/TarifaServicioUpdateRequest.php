@@ -26,6 +26,26 @@ class TarifaServicioUpdateRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'descripcion.required' => 'Ingresa la descripción del servicio.',
+            'descripcion.string' => 'La descripción del servicio debe ser texto.',
+            'descripcion.max' => 'La descripción del servicio no debe superar 255 caracteres.',
+            'nomenclador.max' => 'El nomenclador del servicio no debe superar 50 caracteres.',
+            'precio_sin_igv.required' => 'Ingresa el precio sin IGV del servicio.',
+            'precio_sin_igv.numeric' => 'El precio sin IGV del servicio debe ser numérico.',
+            'precio_sin_igv.min' => 'El precio sin IGV del servicio no puede ser negativo.',
+            'unidad.required' => 'Ingresa la unidad del servicio.',
+            'unidad.numeric' => 'La unidad del servicio debe ser numérica.',
+            'unidad.min' => 'La unidad del servicio no puede ser negativa.',
+            'grupo_codigo.max' => 'El grupo del servicio no debe superar 20 caracteres.',
+            'desea_liberar_precio.boolean' => 'Indica si desea liberar precio con un valor válido.',
+            'estado.required' => 'Selecciona el estado del servicio.',
+            'estado.in' => 'El estado del servicio debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if ($this->has('nomenclador')) {

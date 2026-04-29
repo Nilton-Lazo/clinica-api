@@ -34,6 +34,29 @@ class PaqueteStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.prohibited' => 'El código del paquete lo genera el sistema; no lo envíes manualmente.',
+            'descripcion.required' => 'Ingresa la descripción del paquete.',
+            'descripcion.string' => 'La descripción del paquete debe ser texto.',
+            'descripcion.max' => 'La descripción del paquete no debe superar 255 caracteres.',
+            'tarifa_id.required' => 'Selecciona la tarifa del paquete.',
+            'tarifa_id.integer' => 'Selecciona una tarifa válida para el paquete.',
+            'tarifa_id.min' => 'Selecciona una tarifa válida para el paquete.',
+            'precio_sin_igv.required' => 'Ingresa el precio sin IGV del paquete.',
+            'precio_sin_igv.numeric' => 'El precio sin IGV del paquete debe ser numérico.',
+            'precio_sin_igv.min' => 'El precio sin IGV del paquete no puede ser negativo.',
+            'vigencia_actual.required' => 'Ingresa la vigencia actual del paquete.',
+            'vigencia_actual.date_format' => 'La vigencia actual del paquete debe tener formato YYYY-MM-DD.',
+            'dias_hospitalizacion.integer' => 'Los días de hospitalización del paquete deben ser un número entero.',
+            'dias_hospitalizacion.min' => 'Los días de hospitalización del paquete no pueden ser negativos.',
+            'dias_hospitalizacion.max' => 'Los días de hospitalización del paquete superan el límite permitido.',
+            'cuenta_contabilidad.max' => 'La cuenta contable del paquete no debe superar 255 caracteres.',
+            'estado.in' => 'El estado del paquete debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if ($this->has('descripcion')) {

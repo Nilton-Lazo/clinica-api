@@ -22,6 +22,18 @@ class TipoIafaUpdateRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.prohibited' => 'El código del tipo de IAFAS lo genera el sistema; no lo modifiques manualmente.',
+            'descripcion.required' => 'Ingresa la descripción del tipo de IAFAS.',
+            'descripcion.string' => 'La descripción del tipo de IAFAS debe ser texto.',
+            'descripcion.max' => 'La descripción del tipo de IAFAS no debe superar 120 caracteres.',
+            'estado.required' => 'Selecciona el estado del tipo de IAFAS.',
+            'estado.in' => 'El estado del tipo de IAFAS debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if ($this->has('descripcion')) {

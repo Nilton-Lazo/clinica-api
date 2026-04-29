@@ -21,7 +21,7 @@ class TarifaCategoriaService
     {
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa debe estar ACTIVA para operar categorías.'],
+                'tarifa_id' => ['La tarifa seleccionada debe estar activa para gestionar categorías.'],
             ]);
         }
     }
@@ -30,7 +30,7 @@ class TarifaCategoriaService
     {
         if ((int)$categoria->tarifa_id !== (int)$tarifa->id) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La categoría no pertenece a la tarifa indicada.'],
+                'tarifa_id' => ['La categoría seleccionada no pertenece a la tarifa indicada. Actualiza la pantalla e intenta otra vez.'],
             ]);
         }
     }
@@ -127,7 +127,7 @@ class TarifaCategoriaService
 
         $nombre = trim((string)($data['descripcion'] ?? ''));
         if ($nombre === '') {
-            throw ValidationException::withMessages(['descripcion' => ['La descripción es requerida.']]);
+            throw ValidationException::withMessages(['descripcion' => ['Ingresa la descripción de la categoría.']]);
         }
 
         $existeMismoNombre = TarifaCategoria::query()

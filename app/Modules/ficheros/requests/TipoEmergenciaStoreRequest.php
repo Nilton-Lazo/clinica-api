@@ -22,6 +22,17 @@ class TipoEmergenciaStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.unique' => 'Ya existe un tipo de emergencia con ese código.',
+            'codigo.max' => 'El código del tipo de emergencia no debe superar 50 caracteres.',
+            'descripcion.required' => 'Ingresa la descripción del tipo de emergencia.',
+            'descripcion.max' => 'La descripción del tipo de emergencia no debe superar 255 caracteres.',
+            'estado.in' => 'Selecciona un estado válido para el tipo de emergencia.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

@@ -422,7 +422,7 @@ class PacienteService
                 ->first();
 
             if (!$tc) {
-                throw ValidationException::withMessages(['tipo_cliente_id' => ['Tipo de cliente no existe o no está ACTIVO.']]);
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El tipo de cliente seleccionado no existe o no está activo para afiliar planes.']]);
             }
 
             $exists = PacientePlan::query()
@@ -431,7 +431,7 @@ class PacienteService
                 ->exists();
 
             if ($exists) {
-                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene este plan registrado.']]);
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene registrado este plan. Selecciona otro tipo de cliente o edita el plan existente.']]);
             }
 
             $fecha = $data['fecha_afiliacion'] ?? null;
@@ -475,7 +475,7 @@ class PacienteService
                 ->first();
 
             if (!$tc) {
-                throw ValidationException::withMessages(['tipo_cliente_id' => ['Tipo de cliente no existe o no está ACTIVO.']]);
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El tipo de cliente seleccionado no existe o no está activo para actualizar planes.']]);
             }
 
             $exists = PacientePlan::query()
@@ -485,7 +485,7 @@ class PacienteService
                 ->exists();
 
             if ($exists) {
-                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene este plan registrado.']]);
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene registrado este plan. Selecciona otro tipo de cliente o edita el plan existente.']]);
             }
 
             $fecha = $data['fecha_afiliacion'] ?? null;

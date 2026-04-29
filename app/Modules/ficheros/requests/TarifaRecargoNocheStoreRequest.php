@@ -22,6 +22,22 @@ class TarifaRecargoNocheStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'tarifa_categoria_id.required' => 'Selecciona la categoría del tarifario para aplicar el recargo nocturno.',
+            'tarifa_categoria_id.integer' => 'Selecciona una categoría válida para el recargo nocturno.',
+            'tarifa_categoria_id.min' => 'Selecciona una categoría válida para el recargo nocturno.',
+            'porcentaje.required' => 'Ingresa el porcentaje del recargo nocturno.',
+            'porcentaje.numeric' => 'El porcentaje del recargo nocturno debe ser numérico.',
+            'porcentaje.min' => 'El porcentaje del recargo nocturno no puede ser menor a 0.',
+            'porcentaje.max' => 'El porcentaje del recargo nocturno no puede superar 100.',
+            'hora_desde.regex' => 'Ingresa una hora de inicio válida para el recargo nocturno.',
+            'hora_hasta.regex' => 'Ingresa una hora de fin válida para el recargo nocturno.',
+            'estado.in' => 'Selecciona un estado válido para el recargo nocturno.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('hora_desde') || trim((string)$this->input('hora_desde')) === '') {

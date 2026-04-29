@@ -22,4 +22,17 @@ class AreaJefaturaUpdateRequest extends FormRequest
             'estado' => ['required', 'string', Rule::in(RecordStatus::values())],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'codigo.required' => 'Ingresa el código del área o jefatura.',
+            'codigo.unique' => 'Ya existe un área o jefatura con ese código.',
+            'codigo.max' => 'El código del área o jefatura no debe superar 50 caracteres.',
+            'descripcion.required' => 'Ingresa la descripción del área o jefatura.',
+            'descripcion.max' => 'La descripción del área o jefatura no debe superar 255 caracteres.',
+            'estado.required' => 'Selecciona el estado del área o jefatura.',
+            'estado.in' => 'Selecciona un estado válido para el área o jefatura.',
+        ];
+    }
 }

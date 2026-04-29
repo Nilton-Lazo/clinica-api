@@ -28,6 +28,12 @@ class ReporteIngresosCajaController extends Controller
         $v = $request->validate([
             'caja_apertura_id' => ['required', 'integer', 'exists:caja_aperturas,id'],
             'numeracion_id' => ['nullable', 'string', 'max:32'],
+        ], [
+            'caja_apertura_id.required' => 'Selecciona una apertura de caja para consultar movimientos.',
+            'caja_apertura_id.integer' => 'Selecciona una apertura de caja válida.',
+            'caja_apertura_id.exists' => 'La apertura de caja seleccionada no existe.',
+            'numeracion_id.string' => 'La serie del comprobante debe ser texto.',
+            'numeracion_id.max' => 'La serie del comprobante no debe superar 32 caracteres.',
         ]);
 
         $data = $this->service->movimientos(

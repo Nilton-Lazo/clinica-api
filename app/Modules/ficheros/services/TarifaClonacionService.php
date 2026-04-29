@@ -20,25 +20,25 @@ class TarifaClonacionService
 
         if (!$base) {
             throw ValidationException::withMessages([
-                'tarifa_base' => ['No existe un tarifario base configurado.'],
+                'tarifa_base' => ['No existe un tarifario base configurado. Marca una tarifa activa como base antes de clonar.'],
             ]);
         }
 
         if ($base->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_base' => ['El tarifario base debe estar ACTIVO.'],
+                'tarifa_base' => ['El tarifario base debe estar activo para clonar categorías, subcategorías y servicios.'],
             ]);
         }
 
         if ($target->tarifa_base) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['No se puede clonar hacia el tarifario base. Seleccione una tarifa operativa.'],
+                'tarifa_id' => ['No se puede clonar hacia el tarifario base. Selecciona una tarifa operativa como destino.'],
             ]);
         }
 
         if ($target->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa destino debe estar ACTIVA.'],
+                'tarifa_id' => ['La tarifa destino debe estar activa para recibir la clonación.'],
             ]);
         }
 

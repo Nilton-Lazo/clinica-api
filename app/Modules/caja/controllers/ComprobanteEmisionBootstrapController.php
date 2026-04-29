@@ -35,9 +35,6 @@ class ComprobanteEmisionBootstrapController extends Controller
         return 20;
     }
 
-    /**
-     * @return array{page: int, per_page: int, status: string}
-     */
     private static function listFilters(): array
     {
         return [

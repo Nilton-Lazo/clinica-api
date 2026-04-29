@@ -26,6 +26,27 @@ class CajaBancoTarjetaStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.unique' => 'Ya existe un banco o tarjeta con ese código.',
+            'codigo.max' => 'El código del banco o tarjeta no debe superar 50 caracteres.',
+            'descripcion.required' => 'Ingresa la descripción del banco o tarjeta.',
+            'descripcion.max' => 'La descripción del banco o tarjeta no debe superar 255 caracteres.',
+            'estado.in' => 'Selecciona un estado válido para el banco o tarjeta.',
+            'forma_pago_ids.required' => 'Selecciona una forma de pago activa.',
+            'forma_pago_ids.array' => 'Selecciona una forma de pago válida.',
+            'forma_pago_ids.size' => 'Selecciona solo una forma de pago para el banco o tarjeta.',
+            'forma_pago_ids.*.integer' => 'Selecciona una forma de pago válida.',
+            'forma_pago_ids.*.exists' => 'La forma de pago seleccionada no existe o está inactiva.',
+            'medio_pago_ids.required' => 'Selecciona un medio de pago activo.',
+            'medio_pago_ids.array' => 'Selecciona un medio de pago válido.',
+            'medio_pago_ids.size' => 'Selecciona solo un medio de pago para el banco o tarjeta.',
+            'medio_pago_ids.*.integer' => 'Selecciona un medio de pago válido.',
+            'medio_pago_ids.*.exists' => 'El medio de pago seleccionado no existe o está inactivo.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

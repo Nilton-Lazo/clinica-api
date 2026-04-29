@@ -22,6 +22,17 @@ class TopicoStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.unique' => 'Ya existe un tópico con ese código.',
+            'codigo.max' => 'El código del tópico no debe superar 50 caracteres.',
+            'descripcion.required' => 'Ingresa la descripción del tópico.',
+            'descripcion.max' => 'La descripción del tópico no debe superar 255 caracteres.',
+            'estado.in' => 'Selecciona un estado válido para el tópico.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

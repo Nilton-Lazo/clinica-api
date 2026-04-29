@@ -12,21 +12,12 @@ use App\Models\User;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Cotización / presupuesto de admisión persistido.
- *
- * Servicios, paquete (si aplica) y contexto del armado en pantalla se guardan en la columna
- * JSON payload (no hay una fila por servicio). El documento queda congelado aunque cambien
- * tarifarios o paquetes en ficheros.
- */
 class Presupuesto extends AuditableModel
 {
 
     protected $table = 'admision_presupuestos';
 
 
-
-    /** Evita registrar el JSON completo en auditoría de modelo. */
 
     protected array $auditExclude = ['payload'];
 
@@ -56,16 +47,6 @@ class Presupuesto extends AuditableModel
 
 
 
-    /**
-
-     * Laravel 10 usa la propiedad {@see $casts}, no un método casts(): el método no se ejecuta.
-
-     *
-
-     * @var array<string, string>
-
-     */
-
     protected $casts = [
 
         'vigencia_hasta' => 'date',
@@ -75,16 +56,6 @@ class Presupuesto extends AuditableModel
     ];
 
 
-
-    /**
-
-     * El valor en BD es JSON (cadena). Al leer desde atributos crudos devolvemos array PHP.
-
-     *
-
-     * @return array<string, mixed>
-
-     */
 
     public function getPayloadAttribute(mixed $value): array
 

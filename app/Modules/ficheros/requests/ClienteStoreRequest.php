@@ -16,8 +16,17 @@ class ClienteStoreRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'codigo.prohibited' => 'El código del cliente lo genera el sistema; no lo envíes manualmente.',
+            'tipo.required' => 'Selecciona el tipo de cliente.',
+            'tipo.in' => 'El tipo de cliente debe ser ASISTENCIAL o ADMINISTRATIVO.',
+            'nombre.required' => 'Ingresa el nombre del cliente.',
+            'nombre.string' => 'El nombre del cliente debe ser texto.',
+            'nombre.max' => 'El nombre del cliente no debe superar 255 caracteres.',
             'dni_o_ruc.required' => 'El DNI o RUC es obligatorio.',
             'dni_o_ruc.regex' => 'El DNI o RUC debe tener 8 dígitos (DNI) o 11 (RUC).',
+            'telefono.max' => 'El teléfono del cliente no debe superar 30 caracteres.',
+            'direccion.max' => 'La dirección del cliente no debe superar 255 caracteres.',
+            'estado.in' => 'El estado del cliente debe ser ACTIVO o INACTIVO.',
         ];
     }
 

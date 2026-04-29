@@ -4,10 +4,12 @@ namespace App\Modules\emergencia\services;
 
 use App\Core\NroCuentaService;
 use App\Modules\admision\models\RegistroEmergencia;
+use App\Modules\admision\models\Paciente;
 use App\Modules\admision\services\citas\CuentaSyncService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 
 class RegistroEmergenciaService
 {
@@ -92,6 +94,7 @@ class RegistroEmergenciaService
         $fecha = isset($data['fecha']) ? Carbon::parse($data['fecha']) : now();
         $orden = $this->nextOrdenForDateInternal($fecha);
         $numeroCuenta = $this->nroCuentaService->next();
+        $this->ensurePacienteExists((string) $data['numero_hc']);
 
         $record = RegistroEmergencia::create([
             'orden' => $orden,
@@ -141,6 +144,8 @@ class RegistroEmergenciaService
     public function update(array $data, int $id): RegistroEmergencia
     {
         $record = RegistroEmergencia::query()->findOrFail($id);
+        $numeroHc = (string) ($data['numero_hc'] ?? $record->numero_hc);
+        $this->ensurePacienteExists($numeroHc);
 
         $record->fill([
             'orden' => $data['orden'] ?? $record->orden,
@@ -206,5 +211,28 @@ class RegistroEmergenciaService
             ->whereDate('fecha', $fecha->format('Y-m-d'))
             ->count();
         return str_pad((string) ($count + 1), 3, '0', STR_PAD_LEFT);
+    }
+
+    private function ensurePacienteExists(string $numeroHc): void
+    {
+        $hc = trim($numeroHc);
+        if ($hc === '') {
+            throw ValidationException::withMessages([
+                'numero_hc' => ['Selecciona un paciente antes de guardar el registro de emergencia.'],
+            ]);
+        }
+
+        $exists = Paciente::query()
+            ->where(function ($query) use ($hc) {
+                $query->where('numero_documento', $hc)
+                    ->orWhere('nr', $hc);
+            })
+            ->exists();
+
+        if (!$exists) {
+            throw ValidationException::withMessages([
+                'numero_hc' => ['No se encontró un paciente activo con la historia clínica seleccionada. Busca y selecciona nuevamente al paciente.'],
+            ]);
+        }
     }
 }

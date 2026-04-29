@@ -15,16 +15,12 @@ class PresupuestoService
 {
     private const CODIGO_MIN_DIGITS = 10;
 
-    /** Caché de vista previa del siguiente código (se invalida al crear un presupuesto). */
     private const NEXT_CODIGO_CACHE_KEY = 'admision:presupuestos:next_codigo_preview';
 
     private const NEXT_CODIGO_CACHE_TTL_SECONDS = 3600;
 
     public function __construct(private AuditService $audit) {}
 
-    /**
-     * Código legible alineado al id: mínimo 10 dígitos con ceros a la izquierda; si el id supera ese ancho, no se trunca.
-     */
     public function formatCodigoFromId(int $id): string
     {
         $s = (string) $id;
@@ -33,10 +29,6 @@ class PresupuestoService
         return str_pad($s, $len, '0', STR_PAD_LEFT);
     }
 
-    /**
-     * Vista previa del siguiente código. Usa caché (invalidada al guardar) para responder rápido;
-     * el código definitivo sigue siendo único (derivado del id autoincremental tras el INSERT).
-     */
     public function previewNextCodigo(): string
     {
         return Cache::remember(
@@ -50,16 +42,6 @@ class PresupuestoService
         );
     }
 
-    /**
-     * PostgreSQL / PDO requieren JSON como cadena en el INSERT. Se codifica aquí de forma explícita.
-     *
-     * @param  array<string, mixed>  $payload
-     */
-    /**
-     * Listado paginado con datos del paciente (HC / nombre alineados a la lógica del modelo Paciente).
-     *
-     * @param  array<string, mixed>  $filters  validated index request
-     */
     public function paginate(array $filters): LengthAwarePaginator
     {
         $perPage = min(100, max(1, (int) ($filters['per_page'] ?? 50)));
@@ -118,7 +100,6 @@ class PresupuestoService
 
         $query->orderByDesc('admision_presupuestos.created_at');
 
-        /** @var LengthAwarePaginator $paginator */
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
         $paginator->getCollection()->transform(function ($row) {
@@ -157,10 +138,6 @@ class PresupuestoService
         }
     }
 
-    /**
-     * @param  array<string, mixed>  $data  validated request data
-     * @return array{presupuesto: Presupuesto}
-     */
     public function store(array $data, ?int $userId): array
     {
         $pacienteId = (int) $data['paciente_id'];
@@ -173,7 +150,7 @@ class PresupuestoService
 
         if (!$plan) {
             throw ValidationException::withMessages([
-                'paciente_plan_id' => ['El plan no pertenece al paciente indicado.'],
+                'paciente_plan_id' => ['El plan seleccionado no pertenece al paciente del presupuesto.'],
             ]);
         }
 

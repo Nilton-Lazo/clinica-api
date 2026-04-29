@@ -25,7 +25,7 @@ class TarifaSubcategoriaService
     {
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa debe estar ACTIVA para operar subcategorías.'],
+                'tarifa_id' => ['La tarifa seleccionada debe estar activa para gestionar subcategorías.'],
             ]);
         }
     }
@@ -34,7 +34,7 @@ class TarifaSubcategoriaService
     {
         if ((int)$sub->tarifa_id !== (int)$tarifa->id) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La subcategoría no pertenece a la tarifa indicada.'],
+                'tarifa_id' => ['La subcategoría seleccionada no pertenece a la tarifa indicada. Actualiza la pantalla e intenta otra vez.'],
             ]);
         }
     }
@@ -55,11 +55,11 @@ class TarifaSubcategoriaService
             ->first();
 
         if (!$cat) {
-            throw ValidationException::withMessages(['categoria_id' => ['Categoría no existe en esta tarifa.']]);
+            throw ValidationException::withMessages(['categoria_id' => ['La categoría seleccionada no existe en esta tarifa.']]);
         }
 
         if ($cat->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['categoria_id' => ['La categoría debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['categoria_id' => ['La categoría seleccionada debe estar activa para crear subcategorías.']]);
         }
 
         return $cat;
@@ -68,7 +68,7 @@ class TarifaSubcategoriaService
     public function peekNextCodigo(Tarifa $tarifa, int $categoriaId): string
     {
         if ($categoriaId < 1) {
-            throw ValidationException::withMessages(['categoria_id' => ['categoria_id es requerido.']]);
+            throw ValidationException::withMessages(['categoria_id' => ['Selecciona una categoría para generar el código de subcategoría.']]);
         }
 
         $last = TarifaSubcategoria::query()

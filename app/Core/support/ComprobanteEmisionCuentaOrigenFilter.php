@@ -24,10 +24,8 @@ final class ComprobanteEmisionCuentaOrigenFilter
     {
         return match ($o) {
             ComprobanteEmisionOrigen::CONSULTA_AMBULATORIA => [CuentaOrigen::CITA_ATENCION->value],
-            ComprobanteEmisionOrigen::HOSPITALIZACION => [
-                CuentaOrigen::REGISTRO_EMERGENCIA->value,
-                CuentaOrigen::PRE_FACTURACION_HOSPITALARIA->value,
-            ],
+            ComprobanteEmisionOrigen::HOSPITALIZACION => [CuentaOrigen::PRE_FACTURACION_HOSPITALARIA->value],
+            ComprobanteEmisionOrigen::EMERGENCIA => [CuentaOrigen::REGISTRO_EMERGENCIA->value],
             ComprobanteEmisionOrigen::PRESTACIONES => [],
         };
     }

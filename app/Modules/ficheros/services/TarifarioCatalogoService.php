@@ -90,13 +90,13 @@ class TarifarioCatalogoService
 
         if (!$base) {
             throw ValidationException::withMessages([
-                'tarifa_base' => ['No existe un tarifario base configurado.'],
+                'tarifa_base' => ['No existe un tarifario base configurado. Marca una tarifa activa como base antes de clonar o consultar el árbol base.'],
             ]);
         }
 
         if ($base->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_base' => ['El tarifario base debe estar ACTIVO.'],
+                'tarifa_base' => ['El tarifario base debe estar activo para consultar servicios o clonar datos.'],
             ]);
         }
 
@@ -107,13 +107,13 @@ class TarifarioCatalogoService
     {
         if ($tarifa->tarifa_base) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['El tarifario base no puede usarse en esta pantalla (solo para clonación).'],
+                'tarifa_id' => ['El tarifario base no puede usarse como tarifa operativa en esta pantalla; úsalo solo como origen de clonación.'],
             ]);
         }
 
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa debe estar ACTIVA.'],
+                'tarifa_id' => ['La tarifa seleccionada debe estar activa para gestionar servicios.'],
             ]);
         }
     }
@@ -180,7 +180,7 @@ class TarifarioCatalogoService
     {
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa debe estar ACTIVA.'],
+                'tarifa_id' => ['La tarifa seleccionada debe estar activa para consultar sus servicios.'],
             ]);
         }
 
