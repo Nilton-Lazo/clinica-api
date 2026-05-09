@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Core\realtime\RealtimeModelObserver;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -27,6 +28,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        foreach (array_keys(config('realtime.models', [])) as $modelClass) {
+            if (class_exists($modelClass)) {
+                $modelClass::observe(RealtimeModelObserver::class);
+            }
+        }
     }
 }

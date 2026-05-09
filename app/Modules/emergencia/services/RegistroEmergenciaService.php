@@ -3,9 +3,13 @@
 namespace App\Modules\emergencia\services;
 
 use App\Core\NroCuentaService;
+use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\CuentaOrigen;
+use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\RegistroEmergencia;
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\services\citas\CuentaSyncService;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
@@ -16,6 +20,7 @@ class RegistroEmergenciaService
     public function __construct(
         private NroCuentaService $nroCuentaService,
         private CuentaSyncService $cuentaSyncService,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
@@ -82,6 +87,9 @@ class RegistroEmergenciaService
                 
                 $edad = $paciente ? $paciente->edad : null;
                 $registro->setAttribute('edad_paciente', $edad);
+                if ($this->isCuentaCancelada($registro)) {
+                    $registro->setAttribute('estado', 'CANCELADO');
+                }
                 return $registro;
             });
 
@@ -137,6 +145,14 @@ class RegistroEmergenciaService
         ]);
         Cache::increment(self::CACHE_VERSION_KEY);
         $this->cuentaSyncService->syncFromRegistroEmergencia($record);
+        $this->realtime->entityChanged(
+            module: 'emergencia',
+            entity: 'registro_emergencia',
+            action: 'created',
+            id: (int) $record->id,
+            scope: (string) $record->numero_cuenta,
+            metadata: ['fecha' => $record->fecha?->format('Y-m-d'), 'numero_cuenta' => $record->numero_cuenta],
+        );
 
         return $record;
     }
@@ -144,6 +160,7 @@ class RegistroEmergenciaService
     public function update(array $data, int $id): RegistroEmergencia
     {
         $record = RegistroEmergencia::query()->findOrFail($id);
+        $this->assertCuentaEditable($record);
         $numeroHc = (string) ($data['numero_hc'] ?? $record->numero_hc);
         $this->ensurePacienteExists($numeroHc);
 
@@ -189,7 +206,16 @@ class RegistroEmergenciaService
 
         $record->save();
         Cache::increment(self::CACHE_VERSION_KEY);
-        $this->cuentaSyncService->syncFromRegistroEmergencia($record->fresh());
+        $fresh = $record->fresh();
+        $this->cuentaSyncService->syncFromRegistroEmergencia($fresh);
+        $this->realtime->entityChanged(
+            module: 'emergencia',
+            entity: 'registro_emergencia',
+            action: 'updated',
+            id: (int) $record->id,
+            scope: (string) $record->numero_cuenta,
+            metadata: ['fecha' => $record->fecha?->format('Y-m-d'), 'numero_cuenta' => $record->numero_cuenta],
+        );
 
         return $record;
     }
@@ -234,5 +260,35 @@ class RegistroEmergenciaService
                 'numero_hc' => ['No se encontró un paciente activo con la historia clínica seleccionada. Busca y selecciona nuevamente al paciente.'],
             ]);
         }
+    }
+
+    private function isCuentaCancelada(RegistroEmergencia $registro): bool
+    {
+        $cuenta = Cuenta::query()
+            ->where('origen', CuentaOrigen::REGISTRO_EMERGENCIA->value)
+            ->where('origen_id', (int) $registro->id)
+            ->first();
+
+        if ($cuenta && strtoupper(trim((string) ($cuenta->estado ?? ''))) === 'CANCELADO') {
+            return true;
+        }
+
+        $nro = trim((string) ($cuenta?->nro_cuenta ?? $registro->numero_cuenta ?? ''));
+        if ($nro === '') {
+            return false;
+        }
+
+        return EmisionComprobanteFacturacion::existeFacturadoraParaCuenta($nro);
+    }
+
+    private function assertCuentaEditable(RegistroEmergencia $registro): void
+    {
+        if (! $this->isCuentaCancelada($registro)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'nro_cuenta' => ['La cuenta de emergencia está cancelada y facturada. No se permiten modificaciones.'],
+        ]);
     }
 }

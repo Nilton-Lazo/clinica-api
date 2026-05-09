@@ -3,6 +3,7 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\CitaAtencionEstado;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\AgendaCita;
@@ -19,7 +20,10 @@ use Illuminate\Validation\ValidationException;
 
 class AgendaMedicaService
 {
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+    ) {}
 
     public function opciones(array $filters): array
     {
@@ -363,6 +367,19 @@ class AgendaMedicaService
                 201
             );
 
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'agenda_cita',
+                action: 'created',
+                id: (int) $cita->id,
+                scope: (string) $programacion->fecha,
+                metadata: [
+                    'programacion_medica_id' => (int) $programacion->id,
+                    'paciente_id' => (int) $paciente->id,
+                    'hora' => $hora,
+                ],
+            );
+
             return $cita;
         });
         } catch (QueryException $e) {
@@ -494,6 +511,19 @@ class AgendaMedicaService
                 ],
                 'success',
                 200
+            );
+
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'agenda_cita',
+                action: 'disabled',
+                id: (int) $cita->id,
+                scope: (string) $cita->fecha,
+                metadata: [
+                    'programacion_medica_id' => (int) $cita->programacion_medica_id,
+                    'paciente_id' => (int) $cita->paciente_id,
+                    'hora' => $cita->hora,
+                ],
             );
 
             return $cita;

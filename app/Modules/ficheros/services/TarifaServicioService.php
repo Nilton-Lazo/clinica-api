@@ -3,6 +3,7 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\GrupoServicio;
 use App\Modules\admision\models\Tarifa;
@@ -21,7 +22,8 @@ class TarifaServicioService
     public function __construct(
         private AuditService $audit,
         private TarifaCategoriaService $categoriaService,
-        private TarifaSubcategoriaService $subcategoriaService
+        private TarifaSubcategoriaService $subcategoriaService,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     private function assertTarifaActiva(Tarifa $tarifa): void
@@ -191,6 +193,8 @@ class TarifaServicioService
         return DB::transaction(function () use ($tarifa, $data) {
             DB::statement('LOCK TABLE tarifa_servicios IN EXCLUSIVE MODE');
 
+            $data['precio_sin_igv'] = round((float) $data['precio_sin_igv'], 4);
+
             $categoriaId = (int)$data['categoria_id'];
             $subcategoriaId = (int)$data['subcategoria_id'];
 
@@ -274,6 +278,15 @@ class TarifaServicioService
                 ],
                 'success',
                 201
+            );
+
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifa_servicio',
+                action: 'created',
+                id: (int) $srv->id,
+                scope: (string) $tarifa->id,
+                metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
             );
 
             return $srv;
@@ -420,7 +433,7 @@ class TarifaServicioService
                 }
             }
 
-            TarifaServicio::create([
+            $created = TarifaServicio::create([
                 'tarifa_id' => $t->id,
                 'categoria_id' => $cat->id,
                 'subcategoria_id' => $sub->id,
@@ -436,6 +449,15 @@ class TarifaServicioService
                 'desea_liberar_precio' => $deseaLiberarPrecio,
                 'estado' => $estado,
             ]);
+
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifa_servicio',
+                action: 'created',
+                id: (int) $created->id,
+                scope: (string) $t->id,
+                metadata: ['tarifa_id' => (int) $t->id, 'codigo' => $created->codigo],
+            );
         }
 
         return $result;
@@ -447,6 +469,8 @@ class TarifaServicioService
         $this->assertBelongs($tarifa, $srv);
 
         return DB::transaction(function () use ($tarifa, $srv, $data) {
+            $data['precio_sin_igv'] = round((float) $data['precio_sin_igv'], 4);
+
             $before = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev', 'desea_liberar_precio', 'estado']);
 
             $nom = $this->normalizeNomenclador($data['nomenclador'] ?? null);
@@ -505,6 +529,15 @@ class TarifaServicioService
                 200
             );
 
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifa_servicio',
+                action: 'updated',
+                id: (int) $srv->id,
+                scope: (string) $tarifa->id,
+                metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
+            );
+
             return $srv;
         });
     }
@@ -534,6 +567,15 @@ class TarifaServicioService
                 ],
                 'success',
                 200
+            );
+
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifa_servicio',
+                action: 'disabled',
+                id: (int) $srv->id,
+                scope: (string) $tarifa->id,
+                metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
             );
 
             return $srv;

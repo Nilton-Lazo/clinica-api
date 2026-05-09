@@ -20,11 +20,16 @@ class ComprobanteEmisionRegistrarController extends Controller
 
         $validated = $request->validated();
         $row = $this->service->registrar($request->user(), $validated);
+        $row->loadMissing('numeracionComprobante');
 
         return response()->json([
             'data' => [
                 'id' => $row->id,
                 'nro_cuenta' => $row->nro_cuenta,
+                'numeracion_comprobante_id' => (int) $row->numeracion_comprobante_id,
+                'tipo_documento_id' => $row->numeracionComprobante !== null
+                    ? (int) $row->numeracionComprobante->tipo_documento_id
+                    : null,
                 'serie' => $row->serie,
                 'numero_emitido' => $row->numero_emitido,
                 'numero_formateado' => $row->numero_emitido !== null

@@ -3,6 +3,7 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Paquete;
 use App\Modules\admision\models\Tarifa;
@@ -12,7 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class PaqueteServicioService
 {
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+    ) {}
 
     public function listPaquetesPorTarifa(Tarifa $tarifa): Collection
     {
@@ -170,6 +174,21 @@ class PaqueteServicioService
                 ],
                 'success',
                 200
+            );
+
+            $this->realtime->entityChanged(
+                module: 'ficheros',
+                entity: 'paquete_servicio',
+                action: 'updated',
+                id: (int) $paquete->id,
+                scope: (string) $paquete->id,
+                metadata: [
+                    'paquete_id' => (int) $paquete->id,
+                    'tarifa_id' => (int) $paquete->tarifa_id,
+                    'added' => count($added),
+                    'removed' => count($removed),
+                    'total' => count($after),
+                ],
             );
 
             return [

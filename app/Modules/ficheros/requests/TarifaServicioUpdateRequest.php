@@ -16,7 +16,7 @@ class TarifaServicioUpdateRequest extends FormRequest
             'descripcion' => ['required', 'string', 'max:255'],
             'nomenclador' => ['nullable', 'string', 'max:50'],
 
-            'precio_sin_igv' => ['required', 'numeric', 'min:0'],
+            'precio_sin_igv' => ['required', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,4})?$/'],
             'unidad' => ['required', 'numeric', 'min:0'],
             'grupo_codigo' => ['nullable', 'string', 'max:20'],
 
@@ -36,6 +36,7 @@ class TarifaServicioUpdateRequest extends FormRequest
             'precio_sin_igv.required' => 'Ingresa el precio sin IGV del servicio.',
             'precio_sin_igv.numeric' => 'El precio sin IGV del servicio debe ser numérico.',
             'precio_sin_igv.min' => 'El precio sin IGV del servicio no puede ser negativo.',
+            'precio_sin_igv.regex' => 'El precio sin IGV debe tener como máximo 4 decimales.',
             'unidad.required' => 'Ingresa la unidad del servicio.',
             'unidad.numeric' => 'La unidad del servicio debe ser numérica.',
             'unidad.min' => 'La unidad del servicio no puede ser negativa.',
@@ -48,6 +49,10 @@ class TarifaServicioUpdateRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if ($this->has('precio_sin_igv') && is_numeric($this->input('precio_sin_igv'))) {
+            $this->merge(['precio_sin_igv' => round((float) $this->input('precio_sin_igv'), 4)]);
+        }
+
         if ($this->has('nomenclador')) {
             $raw = (string)$this->input('nomenclador');
             $x = strtoupper(trim($raw));

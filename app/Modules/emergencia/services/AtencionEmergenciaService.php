@@ -4,12 +4,15 @@ namespace App\Modules\emergencia\services;
 
 use App\Core\audit\AuditService;
 use App\Core\NroCuentaService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\EstadoFacturacionServicio;
+use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\RegistroEmergenciaServicio;
 use App\Modules\admision\models\RegistroEmergencia;
 use App\Modules\admision\models\Paciente;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\services\citas\CuentaSyncService;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -19,6 +22,7 @@ class AtencionEmergenciaService
         private AuditService $audit,
         private NroCuentaService $nroCuentaService,
         private CuentaSyncService $cuentaSyncService,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     public function datosParaAtencion(int $registroId): array
@@ -30,6 +34,8 @@ class AtencionEmergenciaService
                 'servicios.user'
             ])
             ->findOrFail($registroId);
+        $cuenta = $this->findCuenta($registro);
+        $cuentaBloqueada = $this->isCuentaBloqueada($cuenta, $registro->numero_cuenta);
 
         $paciente = Paciente::query()
             ->where('numero_documento', $registro->numero_hc)
@@ -109,6 +115,13 @@ class AtencionEmergenciaService
                 'monto_a_pagar' => (float)$registro->monto_a_pagar,
             ],
             'paciente' => $paciente ? $paciente->toArray() : null,
+            'cuenta' => $cuenta ? [
+                'id' => (int) $cuenta->id,
+                'nro_cuenta' => (string) $cuenta->nro_cuenta,
+                'estado' => $cuenta->estado !== null ? (string) $cuenta->estado : null,
+                'bloqueada' => $cuentaBloqueada,
+            ] : null,
+            'bloqueada_facturacion' => $cuentaBloqueada,
             'servicios' => $serviciosPayload,
         ];
     }
@@ -116,6 +129,7 @@ class AtencionEmergenciaService
     public function guardarAtencion(int $registroId, array $data): array
     {
         $registro = RegistroEmergencia::query()->findOrFail($registroId);
+        $this->assertCuentaEditable($registro);
 
         $paciente = Paciente::query()
             ->where('numero_documento', $registro->numero_hc)
@@ -220,6 +234,24 @@ class AtencionEmergenciaService
                 200
             );
 
+            $this->realtime->entityChanged(
+                module: 'emergencia',
+                entity: 'atencion_emergencia',
+                action: 'updated',
+                id: (int) $registro->id,
+                scope: (string) $nroCuenta,
+                metadata: ['nro_cuenta' => $nroCuenta, 'estado' => $registro->estado],
+            );
+
+            $this->realtime->entityChanged(
+                module: 'emergencia',
+                entity: 'registro_emergencia',
+                action: 'updated',
+                id: (int) $registro->id,
+                scope: (string) $nroCuenta,
+                metadata: ['nro_cuenta' => $nroCuenta, 'estado' => $registro->estado],
+            );
+
             return [
                 'success' => true,
                 'nro_cuenta' => $nroCuenta,
@@ -277,5 +309,38 @@ class AtencionEmergenciaService
                 'estado_facturacion' => $estadoFacturacion,
             ]);
         }
+    }
+
+    private function findCuenta(RegistroEmergencia $registro): ?Cuenta
+    {
+        return Cuenta::query()
+            ->where('origen', 'REGISTRO_EMERGENCIA')
+            ->where('origen_id', (int) $registro->id)
+            ->first();
+    }
+
+    private function isCuentaBloqueada(?Cuenta $cuenta, ?string $nroCuenta): bool
+    {
+        if ($cuenta && strtoupper(trim((string) ($cuenta->estado ?? ''))) === 'CANCELADO') {
+            return true;
+        }
+
+        $nro = trim((string) ($cuenta?->nro_cuenta ?? $nroCuenta ?? ''));
+        if ($nro === '') {
+            return false;
+        }
+
+        return EmisionComprobanteFacturacion::existeFacturadoraParaCuenta($nro);
+    }
+
+    private function assertCuentaEditable(RegistroEmergencia $registro): void
+    {
+        if (! $this->isCuentaBloqueada($this->findCuenta($registro), $registro->numero_cuenta)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'cuenta' => ['La cuenta está cancelada y facturada. No se permiten modificaciones en la atención de emergencia.'],
+        ]);
     }
 }

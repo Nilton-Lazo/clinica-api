@@ -3,6 +3,7 @@
 namespace App\Modules\caja\services;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Models\User;
 use App\Modules\admision\models\AreaJefatura;
 use App\Modules\caja\models\CajaApertura;
@@ -18,6 +19,7 @@ class CajaAperturaService
 
     public function __construct(
         private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     private function allocateNextCodigoSerial(): string
@@ -121,6 +123,16 @@ class CajaAperturaService
                 201
             );
 
+            $this->realtime->entityChanged(
+                module: 'caja',
+                entity: 'caja_apertura',
+                action: 'created',
+                id: (int) $row->id,
+                scope: strtolower((string) $row->tipo),
+                metadata: ['codigo' => $row->codigo, 'tipo' => $row->tipo],
+                actorId: (int) $actor->id,
+            );
+
             return $row->load(['userEntrega', 'userRecepciona', 'areaJefatura']);
         });
     }
@@ -145,8 +157,16 @@ class CajaAperturaService
                 ]);
             }
 
+            $montoCierre = array_key_exists('monto_cierre', $data)
+                ? (float) $data['monto_cierre']
+                : (float) $open->monto_inicio;
+            $ajusteCierre = array_key_exists('ajuste_cierre', $data)
+                ? (float) $data['ajuste_cierre']
+                : null;
+
             $open->fill([
-                'monto_cierre' => $open->monto_inicio,
+                'monto_cierre' => $montoCierre,
+                'ajuste_cierre' => $ajusteCierre,
                 'observaciones_cierre' => $data['observaciones_cierre'] ?? null,
                 'cerrada_at' => Carbon::now($tz),
             ]);
@@ -166,6 +186,16 @@ class CajaAperturaService
                 200
             );
 
+            $this->realtime->entityChanged(
+                module: 'caja',
+                entity: 'caja_apertura',
+                action: 'closed',
+                id: (int) $open->id,
+                scope: strtolower((string) $open->tipo),
+                metadata: ['codigo' => $open->codigo, 'tipo' => $open->tipo],
+                actorId: (int) $actor->id,
+            );
+
             return $open->load(['userEntrega', 'userRecepciona', 'areaJefatura']);
         });
     }
@@ -174,6 +204,16 @@ class CajaAperturaService
     {
         $tz = (string) config('app.timezone');
         $ultimo = CajaApertura::query()->orderByDesc('apertura_at')->first();
+        $ultimoCierreNormal = CajaApertura::query()
+            ->where('tipo', CajaApertura::TIPO_NORMAL)
+            ->whereNotNull('cerrada_at')
+            ->orderByDesc('cerrada_at')
+            ->first();
+        $ultimoCierreChica = CajaApertura::query()
+            ->where('tipo', CajaApertura::TIPO_CHICA)
+            ->whereNotNull('cerrada_at')
+            ->orderByDesc('cerrada_at')
+            ->first();
         $tipos = CajaApertura::query()
             ->where('user_recepciona_id', $actor->id)
             ->whereNull('cerrada_at')
@@ -196,6 +236,10 @@ class CajaAperturaService
         return [
             'ultimo_cierre_monto' => null,
             'ultimo_cierre_moneda' => 'PEN',
+            'ultimo_cierre_normal_monto' => $ultimoCierreNormal ? (string) $ultimoCierreNormal->monto_cierre : null,
+            'ultimo_cierre_normal_moneda' => $ultimoCierreNormal?->moneda ?? 'PEN',
+            'ultimo_cierre_chica_monto' => $ultimoCierreChica ? (string) $ultimoCierreChica->monto_cierre : null,
+            'ultimo_cierre_chica_moneda' => $ultimoCierreChica?->moneda ?? 'PEN',
             'fondo_emergencia_monto' => null,
             'fondo_emergencia_moneda' => 'PEN',
             'operadores_activos_text' => $estadoTexto,

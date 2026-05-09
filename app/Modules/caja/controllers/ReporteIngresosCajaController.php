@@ -18,7 +18,13 @@ class ReporteIngresosCajaController extends Controller
     {
         $this->authorize('viewAny', CajaFormaPago::class);
 
-        return response()->json($this->service->bootstrap($request->user()));
+        $v = $request->validate([
+            'aperturas_page' => ['sometimes', 'integer', 'min:1'],
+        ]);
+
+        $page = isset($v['aperturas_page']) ? (int) $v['aperturas_page'] : null;
+
+        return response()->json($this->service->bootstrap($request->user(), $page));
     }
 
     public function movimientos(Request $request): JsonResponse
@@ -28,6 +34,8 @@ class ReporteIngresosCajaController extends Controller
         $v = $request->validate([
             'caja_apertura_id' => ['required', 'integer', 'exists:caja_aperturas,id'],
             'numeracion_id' => ['nullable', 'string', 'max:32'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ], [
             'caja_apertura_id.required' => 'Selecciona una apertura de caja para consultar movimientos.',
             'caja_apertura_id.integer' => 'Selecciona una apertura de caja válida.',
@@ -39,7 +47,9 @@ class ReporteIngresosCajaController extends Controller
         $data = $this->service->movimientos(
             $request->user(),
             (int) $v['caja_apertura_id'],
-            isset($v['numeracion_id']) ? trim((string) $v['numeracion_id']) : null
+            isset($v['numeracion_id']) ? trim((string) $v['numeracion_id']) : null,
+            isset($v['page']) ? (int) $v['page'] : 1,
+            isset($v['per_page']) ? (int) $v['per_page'] : 25,
         );
 
         return response()->json(['data' => $data]);

@@ -24,6 +24,7 @@ class CajaApertura extends AuditableModel
         'moneda',
         'monto_inicio',
         'monto_cierre',
+        'ajuste_cierre',
         'usuario_caja',
         'observaciones',
         'observaciones_cierre',
@@ -34,6 +35,7 @@ class CajaApertura extends AuditableModel
     protected $casts = [
         'monto_inicio' => 'decimal:2',
         'monto_cierre' => 'decimal:2',
+        'ajuste_cierre' => 'decimal:3',
         'apertura_at' => 'datetime',
         'cerrada_at' => 'datetime',
     ];

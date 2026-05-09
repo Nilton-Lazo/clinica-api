@@ -6,6 +6,7 @@ use App\Core\audit\AuditableModel;
 use App\Models\User;
 use App\Modules\admision\models\CajaNumeracionComprobante;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CajaEmisionComprobante extends AuditableModel
 {
@@ -48,5 +49,10 @@ class CajaEmisionComprobante extends AuditableModel
     public function numeracionComprobante(): BelongsTo
     {
         return $this->belongsTo(CajaNumeracionComprobante::class, 'numeracion_comprobante_id');
+    }
+
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(CajaEmisionComprobantePago::class, 'emision_comprobante_id');
     }
 }

@@ -8,6 +8,7 @@ use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\models\PacientePlan;
 use App\Modules\admision\models\PreFacturacionHospitalariaRegistro;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -20,11 +21,12 @@ class PreFacturacionHospitalariaService
 
     public function guardarRegistro(int $pacienteId, int $pacientePlanId, ?string $nroCuentaExistente, array $form): array
     {
-        $lineas = $form['lineas'] ?? [];
+        $formNormalizado = $this->normalizarFormParaPersistencia($form);
+        $lineas = $formNormalizado['lineas'] ?? [];
         if (! is_array($lineas)) {
             $lineas = [];
         }
-        $paquete = $form['presupuestoPaquete'] ?? null;
+        $paquete = $formNormalizado['presupuestoPaquete'] ?? null;
         $tienePaquete = is_array($paquete) && ($paquete['id'] ?? null) !== null;
         if (count($lineas) < 1 && ! $tienePaquete) {
             throw ValidationException::withMessages([
@@ -49,22 +51,22 @@ class PreFacturacionHospitalariaService
         $hc = (string) ($paciente->hc ?? '');
         $nr = $paciente->nr !== null ? (string) $paciente->nr : null;
 
-        $tarifaId = isset($form['tarifaId']) && $form['tarifaId'] !== null ? (int) $form['tarifaId'] : null;
+        $tarifaId = isset($formNormalizado['tarifaId']) && $formNormalizado['tarifaId'] !== null ? (int) $formNormalizado['tarifaId'] : null;
         if ($tarifaId === 0) {
             $tarifaId = null;
         }
 
-        $fechaHospitalizacion = isset($form['fechaHospitalizacion']) ? trim((string) $form['fechaHospitalizacion']) : '';
+        $fechaHospitalizacion = isset($formNormalizado['fechaHospitalizacion']) ? trim((string) $formNormalizado['fechaHospitalizacion']) : '';
         $fechaStr = $fechaHospitalizacion !== '' ? substr($fechaHospitalizacion, 0, 10) : null;
 
-        $bloqueado = ($form['bloquearCuenta'] ?? '') === 'BLOQUEADO';
+        $bloqueado = ($formNormalizado['bloquearCuenta'] ?? '') === 'BLOQUEADO';
         $estadoCuenta = $bloqueado ? 'CANCELADO_LISTO_PARA_FACTURAR' : 'ACTIVO';
 
         return DB::transaction(function () use (
             $pacienteId,
             $pacientePlanId,
             $nroCuentaExistente,
-            $form,
+            $formNormalizado,
             $nombre,
             $hc,
             $nr,
@@ -82,12 +84,13 @@ class PreFacturacionHospitalariaService
                 if ((int) $cuenta->paciente_id !== $pacienteId) {
                     throw ValidationException::withMessages(['paciente_id' => ['El paciente seleccionado no coincide con el paciente asociado a la cuenta.']]);
                 }
+                $this->assertCuentaEditable($cuenta);
 
                 $registro = PreFacturacionHospitalariaRegistro::query()
                     ->where('id', (int) $cuenta->origen_id)
                     ->firstOrFail();
 
-                $registro->payload = $form;
+                $registro->payload = $formNormalizado;
                 $registro->save();
 
                 $cuenta->paciente_plan_id = $pacientePlanId;
@@ -107,7 +110,7 @@ class PreFacturacionHospitalariaService
             $registro = new PreFacturacionHospitalariaRegistro;
             $registro->nro_cuenta = $nro;
             $registro->paciente_id = $pacienteId;
-            $registro->payload = $form;
+            $registro->payload = $formNormalizado;
             $registro->save();
 
             $cuenta = new Cuenta;
@@ -128,5 +131,61 @@ class PreFacturacionHospitalariaService
 
             return ['nro_cuenta' => $nro];
         });
+    }
+
+    private function normalizarFormParaPersistencia(array $form): array
+    {
+        $normalized = $form;
+        $lineas = isset($normalized['lineas']) && is_array($normalized['lineas']) ? $normalized['lineas'] : [];
+        $normalized['lineas'] = $this->normalizarLineasConId($lineas);
+
+        return $normalized;
+    }
+
+    private function normalizarLineasConId(array $lineas): array
+    {
+        $maxId = 0;
+        foreach ($lineas as $linea) {
+            if (! is_array($linea)) {
+                continue;
+            }
+            $id = isset($linea['id']) ? (int) $linea['id'] : 0;
+            if ($id > $maxId) {
+                $maxId = $id;
+            }
+        }
+
+        $nextId = max(1, $maxId + 1);
+        $result = [];
+        foreach ($lineas as $linea) {
+            if (! is_array($linea)) {
+                continue;
+            }
+            $lineaId = isset($linea['id']) ? (int) $linea['id'] : 0;
+            if ($lineaId <= 0) {
+                $linea['id'] = $nextId;
+                $nextId++;
+            } else {
+                $linea['id'] = $lineaId;
+            }
+            $result[] = $linea;
+        }
+
+        return $result;
+    }
+
+    private function assertCuentaEditable(Cuenta $cuenta): void
+    {
+        $estado = strtoupper(trim((string) ($cuenta->estado ?? '')));
+        $bloqueada = in_array($estado, ['CANCELADO', 'CANCELADO_LISTO_PARA_FACTURAR'], true);
+        $emitida = EmisionComprobanteFacturacion::existeFacturadoraParaCuenta((string) $cuenta->nro_cuenta);
+
+        if (!$bloqueada && !$emitida) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'nro_cuenta' => ['La cuenta de hospitalización ya está cerrada para edición. No se permiten modificaciones.'],
+        ]);
     }
 }

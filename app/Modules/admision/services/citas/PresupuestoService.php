@@ -3,6 +3,7 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Modules\admision\models\PacientePlan;
 use App\Modules\admision\models\Presupuesto;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -19,7 +20,10 @@ class PresupuestoService
 
     private const NEXT_CODIGO_CACHE_TTL_SECONDS = 3600;
 
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+    ) {}
 
     public function formatCodigoFromId(int $id): string
     {
@@ -191,6 +195,19 @@ class PresupuestoService
         });
 
         Cache::forget(self::NEXT_CODIGO_CACHE_KEY);
+        $presupuesto = $result['presupuesto'];
+        $this->realtime->entityChanged(
+            module: 'admision',
+            entity: 'presupuesto',
+            action: 'created',
+            id: (int) $presupuesto->id,
+            scope: (string) $presupuesto->codigo,
+            metadata: [
+                'codigo' => $presupuesto->codigo,
+                'paciente_id' => (int) $presupuesto->paciente_id,
+                'estado' => $presupuesto->estado,
+            ],
+        );
 
         return $result;
     }

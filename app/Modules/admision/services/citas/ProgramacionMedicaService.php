@@ -3,6 +3,7 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\ModalidadFechasProgramacion;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Medico;
@@ -17,7 +18,10 @@ use Illuminate\Validation\ValidationException;
 
 class ProgramacionMedicaService
 {
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+    ) {}
 
     public function paginate(array $filters): LengthAwarePaginator
     {
@@ -164,6 +168,14 @@ class ProgramacionMedicaService
             );
 
             $ids = array_map(fn($x) => $x->id, $created);
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'programacion_medica',
+                action: 'created',
+                id: count($ids) === 1 ? (int) $ids[0] : 'batch',
+                scope: (string) ($fechas[0] ?? ''),
+                metadata: ['ids' => $ids, 'cantidad' => count($created), 'fechas' => $fechas],
+            );
 
             $full = ProgramacionMedica::query()
                 ->whereIn('id', $ids)
@@ -255,6 +267,15 @@ class ProgramacionMedicaService
                 200
             );
 
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'programacion_medica',
+                action: 'updated',
+                id: (int) $pm->id,
+                scope: (string) $pm->fecha,
+                metadata: ['before' => $before, 'after' => $after],
+            );
+
             return $pm->load([
                 'especialidad:id,codigo,descripcion',
                 'medico:id,nombres,apellido_paterno,apellido_materno,tiempo_promedio_por_paciente',
@@ -283,6 +304,15 @@ class ProgramacionMedicaService
                 ],
                 'success',
                 200
+            );
+
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'programacion_medica',
+                action: 'disabled',
+                id: (int) $pm->id,
+                scope: (string) $pm->fecha,
+                metadata: ['estado' => $pm->estado],
             );
 
             return $pm->load([

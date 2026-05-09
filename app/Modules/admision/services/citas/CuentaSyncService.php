@@ -8,6 +8,7 @@ use App\Modules\admision\models\CitaAtencion;
 use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\models\RegistroEmergencia;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 
 class CuentaSyncService
 {
@@ -34,6 +35,12 @@ class CuentaSyncService
 
         $fechaStr = $r->fecha ? $r->fecha->format('Y-m-d') : null;
 
+        $existing = Cuenta::query()
+            ->where('origen', CuentaOrigen::REGISTRO_EMERGENCIA->value)
+            ->where('origen_id', $r->id)
+            ->first();
+        $estado = $this->estadoSinPisarCuentaCancelada($existing, $nc, $r->estado !== null ? (string) $r->estado : null);
+
         Cuenta::query()->updateOrCreate(
             [
                 'origen' => CuentaOrigen::REGISTRO_EMERGENCIA->value,
@@ -45,7 +52,7 @@ class CuentaSyncService
                 'paciente_plan_id' => $r->paciente_plan_id,
                 'tarifa_id' => $r->tarifa_id,
                 'fecha' => $fechaStr,
-                'estado' => $r->estado !== null ? (string) $r->estado : null,
+                'estado' => $estado,
                 'paciente_nombre' => $nombre !== '' ? $nombre : null,
                 'hc' => $hc,
                 'nr' => $nr,
@@ -65,6 +72,12 @@ class CuentaSyncService
             ? (string) $cita->estado_atencion
             : (string) $cita->estado;
 
+        $existing = Cuenta::query()
+            ->where('origen', CuentaOrigen::CITA_ATENCION->value)
+            ->where('origen_id', $a->id)
+            ->first();
+        $estado = $this->estadoSinPisarCuentaCancelada($existing, $nc, $estado !== '' ? $estado : null);
+
         Cuenta::query()->updateOrCreate(
             [
                 'origen' => CuentaOrigen::CITA_ATENCION->value,
@@ -76,7 +89,7 @@ class CuentaSyncService
                 'paciente_plan_id' => $a->paciente_plan_id,
                 'tarifa_id' => $a->tarifa_id,
                 'fecha' => $fechaStr,
-                'estado' => $estado !== '' ? $estado : null,
+                'estado' => $estado,
                 'paciente_nombre' => $cita->paciente_nombre !== null ? (string) $cita->paciente_nombre : null,
                 'hc' => $cita->hc !== null ? (string) $cita->hc : null,
                 'nr' => $cita->nr !== null ? (string) $cita->nr : null,
@@ -97,5 +110,18 @@ class CuentaSyncService
             ->first();
 
         return $p ? (int) $p->id : null;
+    }
+
+    private function estadoSinPisarCuentaCancelada(?Cuenta $cuenta, string $nroCuenta, ?string $estadoNuevo): ?string
+    {
+        if ($cuenta && strtoupper(trim((string) ($cuenta->estado ?? ''))) === 'CANCELADO') {
+            return 'CANCELADO';
+        }
+
+        if (EmisionComprobanteFacturacion::existeFacturadoraParaCuenta($nroCuenta)) {
+            return 'CANCELADO';
+        }
+
+        return $estadoNuevo;
     }
 }

@@ -10,6 +10,7 @@ use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\PreFacturacionHospitalariaRegistro;
 use App\Modules\admision\services\citas\CitaAtencionService;
 use App\Modules\admision\services\citas\CuentaCitaService;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use App\Modules\emergencia\services\AtencionEmergenciaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,6 +70,7 @@ class CuentaCitaController extends Controller
         $this->authorize('viewAny', AgendaCita::class);
 
         $cuenta = Cuenta::query()->where('nro_cuenta', $nroCuenta)->firstOrFail();
+        $emisionComprobante = $this->emisionComprobanteParaNroCuenta((string) $cuenta->nro_cuenta);
 
         if ($cuenta->origen === CuentaOrigen::REGISTRO_EMERGENCIA->value) {
             $detalle = $this->atencionEmergenciaService->datosParaAtencion((int) $cuenta->origen_id);
@@ -77,6 +79,8 @@ class CuentaCitaController extends Controller
                 'data' => [
                     'cuenta' => $this->serializeCuenta($cuenta),
                     'detalle' => $detalle,
+                    'emision_comprobante' => $emisionComprobante,
+                    'adelanto_resumen' => $this->adelantoResumen((string) $cuenta->nro_cuenta),
                 ],
             ]);
         }
@@ -89,6 +93,8 @@ class CuentaCitaController extends Controller
                 'data' => [
                     'cuenta' => $this->serializeCuenta($cuenta),
                     'detalle' => $detalle,
+                    'emision_comprobante' => $emisionComprobante,
+                    'adelanto_resumen' => $this->adelantoResumen((string) $cuenta->nro_cuenta),
                 ],
             ]);
         }
@@ -103,6 +109,8 @@ class CuentaCitaController extends Controller
                         'pre_facturacion_hospitalaria' => true,
                         'form' => $registro->payload ?? [],
                     ],
+                    'emision_comprobante' => $emisionComprobante,
+                    'adelanto_resumen' => $this->adelantoResumen((string) $cuenta->nro_cuenta),
                 ],
             ]);
         }
@@ -110,8 +118,36 @@ class CuentaCitaController extends Controller
         abort(404);
     }
 
+    /**
+     * @return array{numeracion_comprobante_id:int,tipo_documento_id:int|null,serie:string,numero_emitido:int,numero_formateado:string}|null
+     */
+    private function emisionComprobanteParaNroCuenta(string $nroCuenta): ?array
+    {
+        $e = EmisionComprobanteFacturacion::primeraFacturadoraParaCuenta($nroCuenta);
+        if (! $e) {
+            return null;
+        }
+        $e->loadMissing('numeracionComprobante:id,tipo_documento_id');
+
+        $tipoId = $e->numeracionComprobante !== null
+            ? (int) $e->numeracionComprobante->tipo_documento_id
+            : null;
+
+        return [
+            'numeracion_comprobante_id' => (int) $e->numeracion_comprobante_id,
+            'tipo_documento_id' => $tipoId,
+            'serie' => (string) $e->serie,
+            'numero_emitido' => (int) $e->numero_emitido,
+            'numero_formateado' => str_pad((string) $e->numero_emitido, 7, '0', STR_PAD_LEFT),
+        ];
+    }
+
     private function serializeCuenta(Cuenta $cuenta): array
     {
+        $estado = EmisionComprobanteFacturacion::existeFacturadoraParaCuenta((string) $cuenta->nro_cuenta)
+            ? 'CANCELADO'
+            : $this->estadoListado($cuenta->estado !== null ? (string) $cuenta->estado : '');
+
         return [
             'id' => (int) $cuenta->id,
             'nro_cuenta' => (string) $cuenta->nro_cuenta,
@@ -120,7 +156,16 @@ class CuentaCitaController extends Controller
             'paciente_id' => $cuenta->paciente_id !== null ? (int) $cuenta->paciente_id : null,
             'paciente_plan_id' => $cuenta->paciente_plan_id !== null ? (int) $cuenta->paciente_plan_id : null,
             'tarifa_id' => $cuenta->tarifa_id !== null ? (int) $cuenta->tarifa_id : null,
-            'estado' => $cuenta->estado !== null ? (string) $cuenta->estado : '',
+            'estado' => $estado,
+        ];
+    }
+
+    private function adelantoResumen(string $nroCuenta): array
+    {
+        $total = EmisionComprobanteFacturacion::totalAdelantoGarantiaPorCuenta($nroCuenta);
+
+        return [
+            'total_adelanto' => number_format($total, 2, '.', ''),
         ];
     }
 

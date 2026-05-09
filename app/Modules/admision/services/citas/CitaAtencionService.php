@@ -4,6 +4,7 @@ namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
 use App\Core\NroCuentaService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\CitaAtencionEstado;
 use App\Core\support\EstadoFacturacionServicio;
 use App\Core\support\RecordStatus;
@@ -13,6 +14,7 @@ use App\Modules\admision\models\CitaAtencion;
 use App\Modules\admision\models\CitaAtencionServicio;
 use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\Paciente;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -22,6 +24,7 @@ class CitaAtencionService
         private AuditService $audit,
         private NroCuentaService $nroCuentaService,
         private CuentaSyncService $cuentaSyncService,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     public function datosParaAtencion(int $agendaCitaId): array
@@ -79,7 +82,7 @@ class CitaAtencionService
                 ->where('origen_id', (int) $atencion->id)
                 ->first()
             : null;
-        $cuentaBloqueada = strtoupper(trim((string) ($cuenta?->estado ?? ''))) === 'CANCELADO';
+        $cuentaBloqueada = $this->isCuentaBloqueada($cuenta);
 
         $serviciosPayload = [];
         if ($atencion) {
@@ -417,6 +420,15 @@ class CitaAtencionService
             $cita->refresh();
             $this->cuentaSyncService->syncFromCitaAtencion($atencion, $cita);
 
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'agenda_cita',
+                action: 'updated',
+                id: (int) $cita->id,
+                scope: (string) $nroCuenta,
+                metadata: ['nro_cuenta' => $nroCuenta, 'estado_atencion' => $cita->estado_atencion],
+            );
+
             return $this->datosParaAtencion((int)$cita->id);
         });
     }
@@ -486,12 +498,30 @@ class CitaAtencionService
         if (!$cuenta) {
             return;
         }
-        if (strtoupper(trim((string) ($cuenta->estado ?? ''))) !== 'CANCELADO') {
+        if (!$this->isCuentaBloqueada($cuenta)) {
             return;
         }
         throw ValidationException::withMessages([
             'cuenta' => ['La cuenta está cancelada y facturada. No se permiten modificaciones.'],
         ]);
+    }
+
+    private function isCuentaBloqueada(?Cuenta $cuenta): bool
+    {
+        if (!$cuenta) {
+            return false;
+        }
+
+        if (strtoupper(trim((string) ($cuenta->estado ?? ''))) === 'CANCELADO') {
+            return true;
+        }
+
+        $nro = trim((string) ($cuenta->nro_cuenta ?? ''));
+        if ($nro === '') {
+            return false;
+        }
+
+        return EmisionComprobanteFacturacion::existeFacturadoraParaCuenta($nro);
     }
 
     private function calcularEdad($fechaNacimiento): ?int

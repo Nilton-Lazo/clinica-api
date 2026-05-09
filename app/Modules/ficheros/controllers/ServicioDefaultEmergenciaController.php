@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\RecordStatus;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\ServicioDefaultEmergencia;
@@ -11,6 +12,10 @@ use Illuminate\Validation\Rule;
 
 class ServicioDefaultEmergenciaController extends Controller
 {
+    public function __construct(
+        private RealtimeBroadcaster $realtime,
+    ) {}
+
     public function show($tarifaId)
     {
         $servicios = ServicioDefaultEmergencia::where('tarifa_id', $tarifaId)
@@ -62,6 +67,15 @@ class ServicioDefaultEmergenciaController extends Controller
         if (!empty($inserts)) {
             ServicioDefaultEmergencia::insert($inserts);
         }
+
+        $this->realtime->entityChanged(
+            module: 'ficheros',
+            entity: 'servicio_default_emergencia',
+            action: 'updated',
+            id: (int) $tarifaId,
+            scope: (string) $tarifaId,
+            metadata: ['tarifa_id' => (int) $tarifaId, 'total' => count($servicios)],
+        );
 
         return response()->json([
             'data' => $servicios

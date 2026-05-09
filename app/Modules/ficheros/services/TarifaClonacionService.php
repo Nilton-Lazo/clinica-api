@@ -3,6 +3,7 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Tarifa;
 use Illuminate\Support\Facades\DB;
@@ -10,7 +11,10 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaClonacionService
 {
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+    ) {}
 
     public function cloneFromBase(Tarifa $target, array $payload): array
     {
@@ -291,9 +295,22 @@ class TarifaClonacionService
                 ]
             );                        
 
-            // Evita resultados stale de la grilla izquierda en Facturación->Tarifario
-            // inmediatamente después de clonar al mismo tarifario.
             TarifarioCatalogoService::invalidateServiciosCacheForTarifa($targetId);
+
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifario_clonacion',
+                action: 'cloned',
+                id: $targetId,
+                scope: (string) $targetId,
+                metadata: [
+                    'tarifa_base_id' => $baseId,
+                    'tarifa_target_id' => $targetId,
+                    'categorias' => count($catRows),
+                    'subcategorias' => count($subRows),
+                    'servicios' => count($svcRows),
+                ],
+            );
 
             return $result;
         });

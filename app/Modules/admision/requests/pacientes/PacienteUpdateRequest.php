@@ -76,7 +76,12 @@ class PacienteUpdateRequest extends FormRequest
             'telefono' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'string', 'max:150'],
 
-            'medico_tratante_id' => ['nullable', 'integer'],
+            'medico_tratante_id' => [
+                'nullable',
+                'integer',
+                'required_if:tipo_paciente,' . TipoPaciente::PRIVADO->value,
+                Rule::exists('medicos', 'id')->where(fn($q) => $q->where('estado', RecordStatus::ACTIVO->value)),
+            ],
             'tipo_sangre' => ['nullable', 'string', Rule::in(TipoSangre::values())],
             'tipo_paciente' => ['nullable', 'string', Rule::in(TipoPaciente::values())],
 
@@ -149,6 +154,8 @@ class PacienteUpdateRequest extends FormRequest
             'email.string' => 'El correo electrónico del paciente debe ser texto.',
             'email.max' => 'El correo electrónico del paciente no debe superar 150 caracteres.',
             'medico_tratante_id.integer' => 'El médico tratante seleccionado no es válido.',
+            'medico_tratante_id.required_if' => 'Selecciona el médico tratante cuando el tipo de paciente es Privado.',
+            'medico_tratante_id.exists' => 'El médico tratante seleccionado no existe o no está activo.',
             'tipo_sangre.string' => 'El tipo de sangre debe ser texto.',
             'tipo_sangre.in' => 'El tipo de sangre seleccionado no es válido.',
             'tipo_paciente.string' => 'El tipo de paciente debe ser texto.',
