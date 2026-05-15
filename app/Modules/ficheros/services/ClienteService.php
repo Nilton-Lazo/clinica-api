@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Cliente;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
@@ -15,11 +16,7 @@ class ClienteService
 
     private function formatCodigo(int $n): string
     {
-        if ($n < 1000) {
-            return str_pad((string) $n, 3, '0', STR_PAD_LEFT);
-        }
-
-        return (string) $n;
+        return CodigoCorrelativo::format($n);
     }
 
     private function nextCodigoInt(): int

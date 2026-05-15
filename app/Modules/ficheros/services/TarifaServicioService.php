@@ -5,6 +5,7 @@ namespace App\Modules\ficheros\services;
 use App\Core\audit\AuditService;
 use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\GrupoServicio;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
@@ -46,10 +47,7 @@ class TarifaServicioService
 
     private function format2(int $n, string $what): string
     {
-        if ($n < 1 || $n > 99) {
-            throw new \RuntimeException("No se pudo generar el código de {$what}: excede 2 dígitos (01-99).");
-        }
-        return str_pad((string)$n, 2, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($n);
     }
 
     private function normalizeNomenclador(?string $x): ?string
@@ -175,7 +173,7 @@ class TarifaServicioService
                 });
             }
 
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+            return CodigoCorrelativo::orderByCodigoAsc($query)->paginate($perPage, ['*'], 'page', $page)->appends([
                 'per_page' => $perPage,
                 'q' => $q,
                 'status' => $status,

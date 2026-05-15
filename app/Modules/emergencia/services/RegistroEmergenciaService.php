@@ -3,6 +3,7 @@
 namespace App\Modules\emergencia\services;
 
 use App\Core\NroCuentaService;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\CuentaOrigen;
 use App\Modules\admision\models\Cuenta;
@@ -228,7 +229,7 @@ class RegistroEmergenciaService
         $count = RegistroEmergencia::query()
             ->whereDate('fecha', $date->format('Y-m-d'))
             ->count();
-        return str_pad((string) ($count + 1), 3, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($count + 1);
     }
 
     private function nextOrdenForDateInternal(Carbon $fecha): string
@@ -236,7 +237,7 @@ class RegistroEmergenciaService
         $count = RegistroEmergencia::query()
             ->whereDate('fecha', $fecha->format('Y-m-d'))
             ->count();
-        return str_pad((string) ($count + 1), 3, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($count + 1);
     }
 
     private function ensurePacienteExists(string $numeroHc): void

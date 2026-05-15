@@ -2,6 +2,7 @@
 
 namespace App\Modules\caja\services;
 
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\CuentaOrigen;
 use App\Models\User;
 use App\Modules\admision\models\CajaFormaPago;
@@ -48,11 +49,9 @@ class ReporteIngresosCajaService
         $mediosContado = [];
         if ($formaContado) {
             $fid = (int) $formaContado->id;
-            $medios = CajaMedioPago::query()
-                ->activos()
-                ->with('formasPago')
-                ->orderBy('codigo')
-                ->get();
+            $medios = CodigoCorrelativo::orderByCodigoAsc(
+                CajaMedioPago::query()->activos()->with('formasPago')
+            )->get();
             foreach ($medios as $m) {
                 $ids = $m->formasPago->pluck('id')->map(fn ($x) => (int) $x)->all();
                 if (! in_array($fid, $ids, true)) {

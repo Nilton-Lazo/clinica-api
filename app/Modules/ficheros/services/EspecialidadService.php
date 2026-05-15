@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Especialidad;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
@@ -17,13 +18,7 @@ class EspecialidadService
 
     private function formatCodigo(int $n): string
     {
-        $codigo = str_pad((string)$n, 3, '0', STR_PAD_LEFT);
-
-        if (strlen($codigo) > 10) {
-            throw new \RuntimeException('No se pudo generar el código: excede 10 caracteres.');
-        }
-
-        return $codigo;
+        return CodigoCorrelativo::format($n);
     }
 
     private function nextCodigo(): string
@@ -96,7 +91,7 @@ class EspecialidadService
                 });
             }
 
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+            return CodigoCorrelativo::orderByCodigoAsc($query)->paginate($perPage, ['*'], 'page', $page)->appends([
                 'per_page' => $perPage,
                 'q' => $q,
                 'status' => $status,

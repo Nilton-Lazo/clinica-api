@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\support\CodigoCorrelativo;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\GrupoServicio;
 use Illuminate\Support\Facades\Cache;
@@ -13,10 +14,9 @@ class GrupoServicioController extends Controller
     public function lookup()
     {
         $data = Cache::remember('tarifario:grupos-servicio', self::LOOKUP_CACHE_TTL_SECONDS, function () {
-            $items = GrupoServicio::activos()
-                ->orderBy('orden')
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'descripcion', 'abrev']);
+            $items = CodigoCorrelativo::orderByCodigoAsc(
+                GrupoServicio::activos()->orderBy('orden')
+            )->get(['id', 'codigo', 'descripcion', 'abrev']);
 
             return $items->map(fn ($g) => [
                 'id' => (int)$g->id,

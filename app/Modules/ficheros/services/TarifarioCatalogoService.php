@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\services;
 
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaRecargoNoche;
@@ -350,16 +351,15 @@ class TarifarioCatalogoService
     {
         $base = $this->getTarifaBase();
 
-        $cats = DB::table('tarifa_categorias')
-            ->where('tarifa_id', (int)$base->id)
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
+        $cats = CodigoCorrelativo::orderByCodigoAsc(
+            DB::table('tarifa_categorias')->where('tarifa_id', (int) $base->id)
+        )->get(['id', 'codigo', 'nombre']);
 
-        $subs = DB::table('tarifa_subcategorias')
-            ->where('tarifa_id', (int)$base->id)
-            ->orderBy('categoria_id')
-            ->orderBy('codigo')
-            ->get(['id', 'categoria_id', 'codigo', 'nombre']);
+        $subs = CodigoCorrelativo::orderByCodigoAsc(
+            DB::table('tarifa_subcategorias')
+                ->where('tarifa_id', (int) $base->id)
+                ->orderBy('categoria_id')
+        )->get(['id', 'categoria_id', 'codigo', 'nombre']);
 
         $servs = DB::table('tarifa_servicios')
             ->where('tarifa_id', (int)$base->id)

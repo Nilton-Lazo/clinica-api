@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\CajaBancoTarjeta;
 use App\Modules\admision\models\CajaMedioPago;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -19,10 +20,9 @@ class CajaBancoTarjetaService
 
     private function formatCodigo(int $n): string
     {
-        $codigo = str_pad((string) $n, 3, '0', STR_PAD_LEFT);
-        if (strlen($codigo) > 50) {
-            throw new \RuntimeException('No se pudo generar el código: excede 50 caracteres.');
-        }
+        $codigo = CodigoCorrelativo::format($n);
+        CodigoCorrelativo::guardMaxLength($codigo);
+
         return $codigo;
     }
 
@@ -61,13 +61,13 @@ class CajaBancoTarjetaService
             return [];
         }
 
-        $rows = CajaMedioPago::query()
-            ->where('estado', RecordStatus::ACTIVO->value)
-            ->whereHas('formasPago', function ($q) use ($ids) {
-                $q->whereIn('caja_formas_pago.id', $ids);
-            })
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'descripcion', 'estado']);
+        $rows = CodigoCorrelativo::orderByCodigoAsc(
+            CajaMedioPago::query()
+                ->where('estado', RecordStatus::ACTIVO->value)
+                ->whereHas('formasPago', function ($q) use ($ids) {
+                    $q->whereIn('caja_formas_pago.id', $ids);
+                })
+        )->get(['id', 'codigo', 'descripcion', 'estado']);
 
         return $rows->map(fn ($m) => [
             'id' => (int) $m->id,
@@ -170,7 +170,7 @@ class CajaBancoTarjetaService
                 });
             }
 
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+            return CodigoCorrelativo::orderByCodigoAsc($query)->paginate($perPage, ['*'], 'page', $page)->appends([
                 'per_page' => $perPage,
                 'q' => $q,
                 'status' => $status,

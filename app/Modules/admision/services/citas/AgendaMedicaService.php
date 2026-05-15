@@ -6,6 +6,7 @@ use App\Core\audit\AuditService;
 use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\CitaAtencionEstado;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\AgendaCita;
 use App\Modules\admision\models\Medico;
 use App\Modules\admision\models\Paciente;
@@ -542,6 +543,6 @@ class AgendaMedicaService
         $lastInt = $last !== null ? (int)$last : 0;
         $next = $lastInt + 1;
 
-        return str_pad((string)$next, 3, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($next);
     }
 }

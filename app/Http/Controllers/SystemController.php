@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Core\support\CodigoCorrelativo;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 
@@ -17,6 +18,13 @@ class SystemController extends Controller
                 'timezone' => $tz,
                 'iso' => $now->toIso8601String(),
             ],
+        ]);
+    }
+
+    public function codigos(): JsonResponse
+    {
+        return response()->json([
+            'data' => CodigoCorrelativo::publicConfig(),
         ]);
     }
 }

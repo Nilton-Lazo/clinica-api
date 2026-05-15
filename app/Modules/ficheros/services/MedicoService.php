@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\TipoProfesionalClinica;
 use App\Modules\admision\models\Medico;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -16,11 +17,7 @@ class MedicoService
 
     private function formatCodigo(int $n): string
     {
-        $codigo = str_pad((string)$n, 3, '0', STR_PAD_LEFT);
-        if (strlen($codigo) > 10) {
-            throw new \RuntimeException('No se pudo generar el código: excede 10 caracteres.');
-        }
-        return $codigo;
+        return CodigoCorrelativo::format($n);
     }
 
     private function nextCodigo(): string

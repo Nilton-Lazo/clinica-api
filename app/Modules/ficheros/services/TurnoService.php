@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Turno;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -17,23 +18,17 @@ class TurnoService
 
     private function formatCodigo(int $n): string
     {
-        $codigo = str_pad((string)$n, 3, '0', STR_PAD_LEFT);
-        if (strlen($codigo) !== 3) {
-            throw new \RuntimeException('No se pudo generar el código.');
-        }
-        return $codigo;
+        return CodigoCorrelativo::format($n);
     }
 
     public function previewNextCodigo(): string
     {
-        $last = Turno::query()->orderByDesc('codigo')->value('codigo');
-        $next = $last ? ((int)$last + 1) : 1;
+        $last = Turno::query()
+            ->whereRaw("codigo ~ '^[0-9]+$'")
+            ->orderByRaw('codigo::int desc')
+            ->value('codigo');
 
-        if ($next > 999) {
-            return $this->formatCodigo(999);
-        }
-
-        return $this->formatCodigo($next);
+        return CodigoCorrelativo::nextFromLast($last);
     }
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
@@ -78,7 +73,7 @@ class TurnoService
                 });
             }
 
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+            return CodigoCorrelativo::orderByCodigoAsc($query)->paginate($perPage, ['*'], 'page', $page)->appends([
                 'per_page' => $perPage,
                 'q' => $q,
                 'status' => $status,
@@ -91,14 +86,11 @@ class TurnoService
         return DB::transaction(function () use ($data) {
             DB::statement('LOCK TABLE turnos IN EXCLUSIVE MODE');
 
-            $last = Turno::query()->orderByDesc('codigo')->value('codigo');
-            $next = $last ? ((int)$last + 1) : 1;
-
-            if ($next > 999) {
-                throw ValidationException::withMessages(['codigo' => ['Se alcanzó el máximo de turnos (999).']]);
-            }
-
-            $codigo = $this->formatCodigo($next);
+            $last = Turno::query()
+                ->whereRaw("codigo ~ '^[0-9]+$'")
+                ->orderByRaw('codigo::int desc')
+                ->value('codigo');
+            $codigo = CodigoCorrelativo::nextFromLast($last);
 
             [$duracionMin, $hi, $hf] = $this->calcDurationMinutes($data['hora_inicio'], $data['hora_fin']);
             $auto = $this->buildDescripcion($codigo, $hi, $hf);

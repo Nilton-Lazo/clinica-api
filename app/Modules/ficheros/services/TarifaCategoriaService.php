@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -37,10 +38,7 @@ class TarifaCategoriaService
 
     private function formatCodigo(int $n): string
     {
-        if ($n < 1 || $n > 99) {
-            throw new \RuntimeException('No se pudo generar el código de categoría: excede 2 dígitos (01-99).');
-        }
-        return str_pad((string)$n, 2, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($n);
     }
 
     public function peekNextCodigo(Tarifa $tarifa): string
@@ -85,7 +83,7 @@ class TarifaCategoriaService
                 });
             }
 
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+            return CodigoCorrelativo::orderByCodigoAsc($query)->paginate($perPage, ['*'], 'page', $page)->appends([
                 'per_page' => $perPage,
                 'q' => $q,
                 'status' => $status,
@@ -100,11 +98,11 @@ class TarifaCategoriaService
         $key = sprintf('tarifario:cat:lookup:%s:%s', $tarifa->id, $onlyActivas ? '1' : '0');
 
         return Cache::remember($key, self::LOOKUP_CACHE_TTL_SECONDS, function () use ($tarifa, $onlyActivas) {
-            $q = TarifaCategoria::query()
-                ->where('tarifa_id', $tarifa->id)
-                ->when($onlyActivas, fn($x) => $x->where('estado', RecordStatus::ACTIVO->value))
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre', 'estado']);
+            $q = CodigoCorrelativo::orderByCodigoAsc(
+                TarifaCategoria::query()
+                    ->where('tarifa_id', $tarifa->id)
+                    ->when($onlyActivas, fn ($x) => $x->where('estado', RecordStatus::ACTIVO->value))
+            )->get(['id', 'codigo', 'nombre', 'estado']);
 
             return $q->map(fn($c) => [
                 'id' => (int)$c->id,

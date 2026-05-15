@@ -3,6 +3,7 @@
 namespace App\Modules\ficheros\requests;
 
 use App\Core\support\RecordStatus;
+use App\Modules\ficheros\support\CajaNumeracionSerie;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +18,7 @@ class CajaNumeracionComprobanteStoreRequest extends FormRequest
     {
         return [
             'tipo_documento_id' => ['required', 'integer', Rule::exists('caja_tipos_documento', 'id')->where('estado', RecordStatus::ACTIVO->value)],
-            'serie' => ['required', 'string', 'max:20'],
+            'serie' => ['required', 'string', 'size:3', 'regex:/^\d{3}$/'],
             'numero' => ['required', 'integer', 'min:1', 'max:9999999'],
             'estado' => ['sometimes', 'string', Rule::in(RecordStatus::values())],
         ];
@@ -30,7 +31,8 @@ class CajaNumeracionComprobanteStoreRequest extends FormRequest
             'tipo_documento_id.integer' => 'Selecciona un tipo de documento válido.',
             'tipo_documento_id.exists' => 'El tipo de documento seleccionado no existe o está inactivo.',
             'serie.required' => 'Ingresa la serie de la numeración.',
-            'serie.max' => 'La serie no debe superar 20 caracteres.',
+            'serie.size' => 'La serie debe tener exactamente 3 dígitos numéricos.',
+            'serie.regex' => 'La serie solo puede contener dígitos (por ejemplo 004).',
             'numero.required' => 'Ingresa el número inicial de la numeración.',
             'numero.integer' => 'El número inicial debe ser un valor entero.',
             'numero.min' => 'El número inicial debe ser mayor o igual a 1.',
@@ -41,8 +43,8 @@ class CajaNumeracionComprobanteStoreRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $serie = strtoupper(trim((string) $this->input('serie', '')));
-        if ($serie !== '') {
+        $serie = CajaNumeracionSerie::tryNormalize($this->input('serie'));
+        if ($serie !== null) {
             $this->merge(['serie' => $serie]);
         }
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

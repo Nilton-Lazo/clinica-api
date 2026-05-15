@@ -9,4 +9,5 @@ Route::middleware([
     'throttle:api',
 ])->group(function () {
     Route::get('system/datetime', [SystemController::class, 'datetime']);
+    Route::get('system/codigos', [SystemController::class, 'codigos']);
 });

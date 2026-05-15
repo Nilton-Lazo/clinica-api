@@ -164,6 +164,7 @@ Route::prefix('ficheros')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
     Route::put('parametros/emergencia/tipo-documento/{tipoDocumento}', [TipoDocumentoController::class, 'update'])->middleware('throttle:sensitive-write');
     Route::patch('parametros/emergencia/tipo-documento/{tipoDocumento}/desactivar', [TipoDocumentoController::class, 'deactivate'])->middleware('throttle:sensitive-write');
 
+    Route::get('parametros/emergencia/documento-atencion/next-codigo', [DocumentoAtencionController::class, 'nextCodigo'])->middleware('throttle:api');
     Route::get('parametros/emergencia/documento-atencion', [DocumentoAtencionController::class, 'index'])->middleware('throttle:api');
     Route::post('parametros/emergencia/documento-atencion', [DocumentoAtencionController::class, 'store'])->middleware('throttle:sensitive-write');
     Route::put('parametros/emergencia/documento-atencion/{documentoAtencion}', [DocumentoAtencionController::class, 'update'])->middleware('throttle:sensitive-write');

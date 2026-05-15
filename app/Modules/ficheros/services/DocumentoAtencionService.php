@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\DocumentoAtencion;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
@@ -14,6 +15,25 @@ class DocumentoAtencionService
     public function __construct(
         private AuditService $audit,
     ) {}
+
+    private function formatCodigo(int $n): string
+    {
+        $codigo = CodigoCorrelativo::format($n);
+        CodigoCorrelativo::guardMaxLength($codigo);
+
+        return $codigo;
+    }
+
+    public function peekNextCodigo(): string
+    {
+        $last = DocumentoAtencion::query()
+            ->select('codigo')
+            ->whereRaw("codigo ~ '^[0-9]+$'")
+            ->orderByRaw('codigo::int desc')
+            ->value('codigo');
+
+        return CodigoCorrelativo::nextFromLast($last);
+    }
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
     private const CACHE_VERSION_KEY = 'ficheros:parametros:emergencia:documento-atencion:version';
@@ -56,7 +76,7 @@ class DocumentoAtencionService
                 });
             }
 
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+            return CodigoCorrelativo::orderByCodigoAsc($query)->paginate($perPage, ['*'], 'page', $page)->appends([
                 'per_page' => $perPage,
                 'q' => $q,
                 'status' => $status,
@@ -67,10 +87,9 @@ class DocumentoAtencionService
     public function create(array $data): DocumentoAtencion
     {
         return DB::transaction(function () use ($data) {
-            $codigo = trim((string) ($data['codigo'] ?? ''));
-            if ($codigo === '') {
-                throw new \InvalidArgumentException('El código es obligatorio.');
-            }
+            $codigo = isset($data['codigo']) && trim((string) $data['codigo']) !== ''
+                ? trim((string) $data['codigo'])
+                : $this->peekNextCodigo();
             $documentoAtencion = DocumentoAtencion::create([
                 'codigo' => $codigo,
                 'descripcion' => $data['descripcion'],

@@ -4,6 +4,7 @@ namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
 use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\PacientePlan;
 use App\Modules\admision\models\Presupuesto;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -14,8 +15,6 @@ use Illuminate\Validation\ValidationException;
 
 class PresupuestoService
 {
-    private const CODIGO_MIN_DIGITS = 10;
-
     private const NEXT_CODIGO_CACHE_KEY = 'admision:presupuestos:next_codigo_preview';
 
     private const NEXT_CODIGO_CACHE_TTL_SECONDS = 3600;
@@ -27,10 +26,7 @@ class PresupuestoService
 
     public function formatCodigoFromId(int $id): string
     {
-        $s = (string) $id;
-        $len = max(self::CODIGO_MIN_DIGITS, strlen($s));
-
-        return str_pad($s, $len, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($id, 'documento_largo');
     }
 
     public function previewNextCodigo(): string

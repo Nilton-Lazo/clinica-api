@@ -13,6 +13,17 @@ class DocumentoAtencionController extends Controller
 {
     public function __construct(private DocumentoAtencionService $service) {}
 
+    public function nextCodigo()
+    {
+        $this->authorize('create', DocumentoAtencion::class);
+
+        return response()->json([
+            'data' => [
+                'codigo' => $this->service->peekNextCodigo(),
+            ],
+        ]);
+    }
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', DocumentoAtencion::class);

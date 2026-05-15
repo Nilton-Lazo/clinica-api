@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Paquete;
 use App\Modules\admision\models\Tarifa;
@@ -29,18 +30,18 @@ class PaqueteServicioService
 
     public function arbolServiciosPorTarifa(Tarifa $tarifa): array
     {
-        $cats = DB::table('tarifa_categorias')
-            ->where('tarifa_id', (int) $tarifa->id)
-            ->where('estado', RecordStatus::ACTIVO->value)
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
+        $cats = CodigoCorrelativo::orderByCodigoAsc(
+            DB::table('tarifa_categorias')
+                ->where('tarifa_id', (int) $tarifa->id)
+                ->where('estado', RecordStatus::ACTIVO->value)
+        )->get(['id', 'codigo', 'nombre']);
 
-        $subs = DB::table('tarifa_subcategorias')
-            ->where('tarifa_id', (int) $tarifa->id)
-            ->where('estado', RecordStatus::ACTIVO->value)
-            ->orderBy('categoria_id')
-            ->orderBy('codigo')
-            ->get(['id', 'categoria_id', 'codigo', 'nombre']);
+        $subs = CodigoCorrelativo::orderByCodigoAsc(
+            DB::table('tarifa_subcategorias')
+                ->where('tarifa_id', (int) $tarifa->id)
+                ->where('estado', RecordStatus::ACTIVO->value)
+                ->orderBy('categoria_id')
+        )->get(['id', 'categoria_id', 'codigo', 'nombre']);
 
         $servs = DB::table('tarifa_servicios')
             ->where('tarifa_id', (int) $tarifa->id)

@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Tarifa;
 use Illuminate\Support\Facades\DB;
@@ -69,12 +70,12 @@ class TarifaClonacionService
                 ->map(fn ($v) => (string)$v)
                 ->all();
 
-            $baseCats = DB::table('tarifa_categorias')
-                ->where('tarifa_id', $baseId)
-                ->whereIn('id', $baseCatIds)
-                ->whereNotIn('codigo', $existingCatCodes)
-                ->orderBy('codigo')
-                ->get(['codigo', 'nombre', 'estado']);
+            $baseCats = CodigoCorrelativo::orderByCodigoAsc(
+                DB::table('tarifa_categorias')
+                    ->where('tarifa_id', $baseId)
+                    ->whereIn('id', $baseCatIds)
+                    ->whereNotIn('codigo', $existingCatCodes)
+            )->get(['codigo', 'nombre', 'estado']);
 
             $catRows = [];
             foreach ($baseCats as $c) {

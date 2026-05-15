@@ -3,8 +3,10 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\CajaNumeracionComprobante;
+use App\Modules\ficheros\support\CajaNumeracionSerie;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +33,9 @@ class CajaNumeracionComprobanteService
 
     private function numeroFormateado(int $numero): string
     {
-        return str_pad((string) max(1, min(9_999_999, $numero)), 7, '0', STR_PAD_LEFT);
+        $safe = max(1, min(9_999_999, $numero));
+
+        return CodigoCorrelativo::format($safe, 'numero_comprobante');
     }
 
     private function enrichRow(CajaNumeracionComprobante $row, ?int $numeroOverride = null): array
@@ -146,11 +150,12 @@ class CajaNumeracionComprobanteService
     public function create(array $data): array
     {
         return DB::transaction(function () use ($data) {
-            $this->assertUniqueSerie((int) $data['tipo_documento_id'], (string) $data['serie']);
+            $serie = CajaNumeracionSerie::normalize($data['serie'] ?? null);
+            $this->assertUniqueSerie((int) $data['tipo_documento_id'], $serie);
 
             $row = CajaNumeracionComprobante::create([
                 'tipo_documento_id' => (int) $data['tipo_documento_id'],
-                'serie' => (string) $data['serie'],
+                'serie' => $serie,
                 'numero' => (int) $data['numero'],
                 'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
             ]);
@@ -176,11 +181,12 @@ class CajaNumeracionComprobanteService
     {
         return DB::transaction(function () use ($row, $data) {
             $before = $this->enrichRow($row->load('tipoDocumento'));
-            $this->assertUniqueSerie((int) $data['tipo_documento_id'], (string) $data['serie'], (int) $row->id);
+            $serie = CajaNumeracionSerie::normalize($data['serie'] ?? null);
+            $this->assertUniqueSerie((int) $data['tipo_documento_id'], $serie, (int) $row->id);
 
             $row->fill([
                 'tipo_documento_id' => (int) $data['tipo_documento_id'],
-                'serie' => (string) $data['serie'],
+                'serie' => $serie,
                 'numero' => (int) $data['numero'],
                 'estado' => (string) $data['estado'],
             ]);

@@ -4,6 +4,7 @@ namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
 use App\Modules\admision\models\TarifaSubcategoria;
@@ -41,10 +42,7 @@ class TarifaSubcategoriaService
 
     private function formatCodigo(int $n): string
     {
-        if ($n < 1 || $n > 99) {
-            throw new \RuntimeException('No se pudo generar el código de subcategoría: excede 2 dígitos (01-99).');
-        }
-        return str_pad((string)$n, 2, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($n);
     }
 
     private function findCategoriaActiva(Tarifa $tarifa, int $categoriaId): TarifaCategoria
@@ -118,7 +116,7 @@ class TarifaSubcategoriaService
                 });
             }
 
-            return $query->orderBy('categoria_id')->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
+            return CodigoCorrelativo::orderByCodigoAsc($query->orderBy('categoria_id'))->paginate($perPage, ['*'], 'page', $page)->appends([
                 'per_page' => $perPage,
                 'q' => $q,
                 'status' => $status,
@@ -138,12 +136,12 @@ class TarifaSubcategoriaService
         $key = sprintf('tarifario:sub:lookup:%s:%s:%s', $tarifa->id, $categoriaId, $onlyActivas ? '1' : '0');
 
         return Cache::remember($key, self::LOOKUP_CACHE_TTL_SECONDS, function () use ($tarifa, $categoriaId, $onlyActivas) {
-            $q = TarifaSubcategoria::query()
-                ->where('tarifa_id', $tarifa->id)
-                ->where('categoria_id', $categoriaId)
-                ->when($onlyActivas, fn($x) => $x->where('estado', RecordStatus::ACTIVO->value))
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre', 'estado']);
+            $q = CodigoCorrelativo::orderByCodigoAsc(
+                TarifaSubcategoria::query()
+                    ->where('tarifa_id', $tarifa->id)
+                    ->where('categoria_id', $categoriaId)
+                    ->when($onlyActivas, fn ($x) => $x->where('estado', RecordStatus::ACTIVO->value))
+            )->get(['id', 'codigo', 'nombre', 'estado']);
 
             return $q->map(fn($s) => [
                 'id' => (int)$s->id,
