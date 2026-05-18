@@ -3,6 +3,8 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
 use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Contratante;
@@ -12,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 class ContratanteService
 {
+    use AppliesListingQuery;
+
     public function __construct(private AuditService $audit) {}
 
     private function formatCodigo(int $n): string
@@ -49,45 +53,18 @@ class ContratanteService
         Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:contratantes:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:contratantes:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = Contratante::query();
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['codigo', 'razon_social', 'ruc', 'telefono']);
+            $this->applyListingSort($query, $params, ['codigo', 'razon_social', 'estado'], 'codigo');
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('razon_social', 'ilike', "%{$q}%")
-                        ->orWhere('ruc', 'ilike', "%{$q}%")
-                        ->orWhere('telefono', 'ilike', "%{$q}%");
-                });
-            }
-
-            return $query
-                ->orderByRaw('CAST(codigo AS INTEGER) ASC')
-                ->paginate($perPage, ['*'], 'page', $page)
-                ->appends([
-                    'per_page' => $perPage,
-                    'q' => $q,
-                    'status' => $status,
-                ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 

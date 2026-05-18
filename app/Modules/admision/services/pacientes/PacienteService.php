@@ -3,6 +3,8 @@
 namespace App\Modules\admision\services\pacientes;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\ParentescoSeguroPaciente;
 use App\Core\support\RecordStatus;
 use App\Core\support\TipoDocumentoPaciente;
@@ -16,6 +18,8 @@ use Illuminate\Validation\ValidationException;
 
 class PacienteService
 {
+    use AppliesListingQuery;
+
     public function __construct(private AuditService $audit) {}
 
     private function formatNr(int $n): string
@@ -68,35 +72,43 @@ class PacienteService
         return [$a, $b];
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
         $query = Paciente::query();
+        $this->applyListingStatus($query, $params);
+        $this->applyListingSearch($query, $params, [
+            'numero_documento',
+            'nr',
+            'nombres',
+            'apellido_paterno',
+            'apellido_materno',
+        ]);
 
-        if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
+        $filiacionFrom = $params->filter('filiacion_from');
+        $filiacionTo = $params->filter('filiacion_to');
+        if (is_string($filiacionFrom) && $filiacionFrom !== '') {
+            $query->whereDate('created_at', '>=', $filiacionFrom);
+        }
+        if (is_string($filiacionTo) && $filiacionTo !== '') {
+            $query->whereDate('created_at', '<=', $filiacionTo);
         }
 
-        if ($q !== null && $q !== '') {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('numero_documento', 'ilike', "%{$q}%")
-                    ->orWhere('nr', 'ilike', "%{$q}%")
-                    ->orWhere('nombres', 'ilike', "%{$q}%")
-                    ->orWhere('apellido_paterno', 'ilike', "%{$q}%")
-                    ->orWhere('apellido_materno', 'ilike', "%{$q}%");
-            });
+        $sort = $params->sort ?? 'created_at';
+        $allowed = ['hc', 'nombre_completo', 'created_at', 'updated_at', 'estado', 'nr', 'sexo', 'fecha_nacimiento'];
+        if (! in_array($sort, $allowed, true)) {
+            $sort = 'created_at';
+        }
+        $dir = $params->sortDir === 'desc' ? 'desc' : 'asc';
+
+        if ($sort === 'hc') {
+            $query->orderBy('numero_documento', $dir)->orderBy('nr', $dir);
+        } elseif ($sort === 'nombre_completo') {
+            $query->orderByRaw("TRIM(CONCAT_WS(' ', apellido_paterno, apellido_materno, nombres)) {$dir}");
+        } else {
+            $query->orderBy($sort, $dir);
         }
 
-        return $query
-        ->orderBy('created_at', 'desc')
-        ->orderBy('id', 'desc')
-        ->paginate($perPage)
-        ->appends(['per_page' => $perPage, 'q' => $q, 'status' => $status]);
+        return $query->orderBy('id', $dir)->paginate($params->perPage, ['*'], 'page', $params->page);
     }
 
     private function fullName(Paciente $p): string

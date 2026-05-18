@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
@@ -31,7 +32,9 @@ class TarifaCategoriaController extends Controller
     {
         $this->authorize('viewAny', [TarifaCategoria::class, $tarifa]);
 
-        $p = $this->service->paginate($tarifa, $request->only(['q', 'status', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, ['codigo', 'nombre', 'estado'], 'codigo');
+
+        $p = $this->service->paginate($tarifa, $params);
 
         return response()->json([
             'data' => array_map(fn ($x) => $this->present($x), $p->items()),

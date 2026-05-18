@@ -2,6 +2,8 @@
 
 namespace App\Modules\emergencia\controllers;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\RegistroEmergencia;
 use App\Modules\admision\models\Paciente;
@@ -15,17 +17,18 @@ class RegistroEmergenciaController extends Controller
 
     public function index(Request $request)
     {
-        $p = $this->service->paginate($request->only(['q', 'fecha_desde', 'fecha_hasta', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, [
+            'orden',
+            'hora',
+            'numero_hc',
+            'numero_cuenta',
+            'apellidos_nombres',
+            'sexo',
+            'topico',
+            'estado',
+        ], 'orden');
 
-        return response()->json([
-            'data' => $p->items(),
-            'meta' => [
-                'current_page' => $p->currentPage(),
-                'per_page' => $p->perPage(),
-                'total' => $p->total(),
-                'last_page' => $p->lastPage(),
-            ],
-        ]);
+        return GridResponse::fromPaginator($this->service->paginate($params));
     }
 
     public function nextOrden(Request $request)

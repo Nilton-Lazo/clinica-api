@@ -3,6 +3,7 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\GridParams;
 use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\PacientePlan;
@@ -42,10 +43,10 @@ class PresupuestoService
         );
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = min(100, max(1, (int) ($filters['per_page'] ?? 50)));
-        $page = max(1, (int) ($filters['page'] ?? 1));
+        $perPage = $params->perPage;
+        $page = $params->page;
 
         $driver = DB::connection()->getDriverName();
         $hcExpr = match ($driver) {
@@ -70,7 +71,7 @@ class PresupuestoService
             ->selectRaw("{$hcExpr} as hc")
             ->selectRaw("{$nombreExpr} as nombre_completo");
 
-        $q = trim((string) ($filters['q'] ?? ''));
+        $q = trim((string) ($params->q ?? ''));
         if ($q !== '') {
             $escaped = addcslashes($q, '%_\\');
             $term = '%'.$escaped.'%';
@@ -88,17 +89,38 @@ class PresupuestoService
             });
         }
 
-        if (! empty($filters['vigencia_desde'])) {
-            $query->whereDate('admision_presupuestos.vigencia_hasta', '>=', $filters['vigencia_desde']);
+        $vigenciaDesde = $params->filter('vigencia_desde');
+        $vigenciaHasta = $params->filter('vigencia_hasta');
+        $estado = $params->filter('estado');
+        if (is_string($vigenciaDesde) && $vigenciaDesde !== '') {
+            $query->whereDate('admision_presupuestos.vigencia_hasta', '>=', $vigenciaDesde);
         }
-        if (! empty($filters['vigencia_hasta'])) {
-            $query->whereDate('admision_presupuestos.vigencia_hasta', '<=', $filters['vigencia_hasta']);
+        if (is_string($vigenciaHasta) && $vigenciaHasta !== '') {
+            $query->whereDate('admision_presupuestos.vigencia_hasta', '<=', $vigenciaHasta);
         }
-        if (! empty($filters['estado']) && is_string($filters['estado'])) {
-            $query->where('admision_presupuestos.estado', $filters['estado']);
+        if (is_string($estado) && $estado !== '') {
+            $query->where('admision_presupuestos.estado', $estado);
         }
 
-        $query->orderByDesc('admision_presupuestos.created_at');
+        $sort = $params->sort ?? 'created_at';
+        $allowed = ['codigo', 'hc', 'nombre_completo', 'vigencia_hasta', 'estado', 'created_at'];
+        if (! in_array($sort, $allowed, true)) {
+            $sort = 'created_at';
+        }
+        $dir = $params->sortDir === 'desc' ? 'desc' : 'asc';
+        if ($sort === 'hc') {
+            $query->orderBy('hc', $dir);
+        } elseif ($sort === 'nombre_completo') {
+            $query->orderBy('nombre_completo', $dir);
+        } elseif ($sort === 'codigo') {
+            $query->orderBy('admision_presupuestos.codigo', $dir);
+        } elseif ($sort === 'vigencia_hasta') {
+            $query->orderBy('admision_presupuestos.vigencia_hasta', $dir);
+        } elseif ($sort === 'estado') {
+            $query->orderBy('admision_presupuestos.estado', $dir);
+        } else {
+            $query->orderBy('admision_presupuestos.created_at', $dir);
+        }
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 

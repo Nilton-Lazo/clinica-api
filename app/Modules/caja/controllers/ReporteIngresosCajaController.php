@@ -20,11 +20,18 @@ class ReporteIngresosCajaController extends Controller
 
         $v = $request->validate([
             'aperturas_page' => ['sometimes', 'integer', 'min:1'],
+            'sort' => ['sometimes', 'nullable', 'string', 'in:codigo,usuario,fecha,monto_apertura,monto_cierre,estado,tipo'],
+            'sort_dir' => ['sometimes', 'string', 'in:asc,desc'],
         ]);
 
         $page = isset($v['aperturas_page']) ? (int) $v['aperturas_page'] : null;
+        $sort = isset($v['sort']) ? trim((string) $v['sort']) : null;
+        if ($sort === '') {
+            $sort = null;
+        }
+        $sortDir = isset($v['sort_dir']) ? (string) $v['sort_dir'] : 'desc';
 
-        return response()->json($this->service->bootstrap($request->user(), $page));
+        return response()->json($this->service->bootstrap($request->user(), $page, $sort, $sortDir));
     }
 
     public function movimientos(Request $request): JsonResponse
@@ -36,6 +43,8 @@ class ReporteIngresosCajaController extends Controller
             'numeracion_id' => ['nullable', 'string', 'max:32'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'sort' => ['sometimes', 'nullable', 'string', 'in:nro_cuenta,paciente,medico,tipo_comprobante,num_comprobante,total,estado,pago_fracc,medio_pago,origen_sigla,adelanto'],
+            'sort_dir' => ['sometimes', 'string', 'in:asc,desc'],
         ], [
             'caja_apertura_id.required' => 'Selecciona una apertura de caja para consultar movimientos.',
             'caja_apertura_id.integer' => 'Selecciona una apertura de caja válida.',
@@ -44,12 +53,20 @@ class ReporteIngresosCajaController extends Controller
             'numeracion_id.max' => 'La serie del comprobante no debe superar 32 caracteres.',
         ]);
 
+        $sort = isset($v['sort']) ? trim((string) $v['sort']) : null;
+        if ($sort === '') {
+            $sort = null;
+        }
+        $sortDir = isset($v['sort_dir']) ? (string) $v['sort_dir'] : 'asc';
+
         $data = $this->service->movimientos(
             $request->user(),
             (int) $v['caja_apertura_id'],
             isset($v['numeracion_id']) ? trim((string) $v['numeracion_id']) : null,
             isset($v['page']) ? (int) $v['page'] : 1,
             isset($v['per_page']) ? (int) $v['per_page'] : 25,
+            $sort,
+            $sortDir,
         );
 
         return response()->json(['data' => $data]);

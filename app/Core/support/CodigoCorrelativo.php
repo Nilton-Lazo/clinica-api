@@ -99,7 +99,7 @@ final class CodigoCorrelativo
 
     private static function assertSafeColumnName(string $column): void
     {
-        if (! preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $column)) {
+        if (! preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?$/', $column)) {
             throw new \InvalidArgumentException("Nombre de columna inválido: {$column}");
         }
     }

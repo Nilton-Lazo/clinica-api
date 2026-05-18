@@ -3,6 +3,8 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
 use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Tarifa;
@@ -15,6 +17,8 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaSubcategoriaService
 {
+    use AppliesListingQuery;
+
     public ?PropagacionResultado $lastPropagationResult = null;
 
     public function __construct(
@@ -82,22 +86,12 @@ class TarifaSubcategoriaService
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
 
-    public function paginate(Tarifa $tarifa, array $filters): LengthAwarePaginator
+    public function paginate(Tarifa $tarifa, GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
+        $cacheKey = 'tarifario:sub:index:' . $tarifa->id . ':' . $params->toCacheKey('v1');
 
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-        $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
-
-        $cacheKey = sprintf('tarifario:sub:index:%s:%s:%s:%s:%s:%s', $tarifa->id, $page, $perPage, $q ?? '', $status ?? '', $categoriaId);
-
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-            $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $params) {
+            $categoriaId = (int) ($params->filter('categoria_id') ?? 0);
 
             $query = TarifaSubcategoria::query()->where('tarifa_id', $tarifa->id);
 
@@ -105,23 +99,11 @@ class TarifaSubcategoriaService
                 $query->where('categoria_id', $categoriaId);
             }
 
-            if ($status && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['codigo', 'nombre']);
+            $this->applyListingSort($query, $params, ['codigo', 'nombre', 'estado', 'categoria_id'], 'codigo');
 
-            if ($q) {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('nombre', 'ilike', "%{$q}%");
-                });
-            }
-
-            return CodigoCorrelativo::orderByCodigoAsc($query->orderBy('categoria_id'))->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-                'categoria_id' => $categoriaId,
-            ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 

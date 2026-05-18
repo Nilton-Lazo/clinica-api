@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\CajaNumeracionComprobante;
 use App\Modules\ficheros\requests\CajaNumeracionComprobanteStoreRequest;
@@ -16,8 +17,9 @@ class CajaNumeracionComprobanteController extends Controller
     public function index(Request $request)
     {
         $this->authorize('viewAny', CajaNumeracionComprobante::class);
-        $p = $this->service->paginate($request->only(['q', 'status', 'per_page', 'page']));
-        return response()->json($this->service->serializePage($p));
+        $params = GridParams::fromRequest($request, ['serie', 'numero', 'estado'], 'serie');
+
+        return response()->json($this->service->serializePage($this->service->paginate($params)));
     }
 
     public function store(CajaNumeracionComprobanteStoreRequest $request)

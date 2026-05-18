@@ -201,7 +201,24 @@ class AgendaMedicaService
             $appends['estado_atencion'] = $estadoAtencion;
         }
 
-        $p = $query->orderBy('hora', 'asc')->paginate($perPage)->appends($appends);
+        $sort = isset($filters['sort']) ? trim((string) $filters['sort']) : 'hora';
+        $allowedSorts = ['codigo', 'hora', 'hc', 'nr', 'paciente_nombre', 'cuenta', 'motivo', 'estado'];
+        if ($sort === '' || ! in_array($sort, $allowedSorts, true)) {
+            $sort = 'hora';
+        }
+        $sortDir = strtolower((string) ($filters['sort_dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+        $sortColumn = $sort === 'estado' ? 'estado_atencion' : $sort;
+        $query->orderBy($sortColumn, $sortDir);
+
+        if ($sort !== 'hora') {
+            $query->orderBy('hora', 'asc');
+        }
+
+        $appends['sort'] = $sort;
+        $appends['sort_dir'] = $sortDir;
+
+        $page = max(1, (int) ($filters['page'] ?? 1));
+        $p = $query->paginate($perPage, ['*'], 'page', $page)->appends($appends);
 
         return ['programacion' => $programacion, 'paginator' => $p];
     }

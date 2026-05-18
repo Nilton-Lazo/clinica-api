@@ -2,6 +2,8 @@
 
 namespace App\Modules\admision\controllers\citas;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\models\Presupuesto;
@@ -44,17 +46,17 @@ class PresupuestoController extends Controller
     {
         $this->authorize('viewAny', Paciente::class);
 
-        $p = $this->service->paginate($request->validated());
+        $request->validated();
+        $params = GridParams::fromRequest($request, [
+            'codigo',
+            'hc',
+            'nombre_completo',
+            'vigencia_hasta',
+            'estado',
+            'created_at',
+        ], 'created_at');
 
-        return response()->json([
-            'data' => $p->items(),
-            'meta' => [
-                'current_page' => $p->currentPage(),
-                'per_page' => $p->perPage(),
-                'total' => $p->total(),
-                'last_page' => $p->lastPage(),
-            ],
-        ]);
+        return GridResponse::fromPaginator($this->service->paginate($params));
     }
 
     public function nextCodigo(): JsonResponse

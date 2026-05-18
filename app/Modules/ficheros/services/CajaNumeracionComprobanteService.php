@@ -3,6 +3,8 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\CajaNumeracionComprobante;
@@ -14,6 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 class CajaNumeracionComprobanteService
 {
+    use AppliesListingQuery;
+
     public function __construct(
         private AuditService $audit,
     ) {}
@@ -59,43 +63,30 @@ class CajaNumeracionComprobanteService
         ];
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int) ($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int) ($filters['page'] ?? 1));
-        $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string) $filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:parametros:caja:numeracion-comprobante:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:parametros:caja:numeracion-comprobante:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($perPage, $page, $q, $status) {
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = CajaNumeracionComprobante::query()->with('tipoDocumento');
+            $this->applyListingStatus($query, $params);
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('serie', 'ilike', "%{$q}%")
-                        ->orWhereRaw("LPAD(numero::text, 7, '0') ilike ?", ["%{$q}%"])
-                        ->orWhereHas('tipoDocumento', function ($tq) use ($q) {
-                            $tq->where('codigo', 'ilike', "%{$q}%")
-                                ->orWhere('descripcion', 'ilike', "%{$q}%");
+            if ($params->q !== null) {
+                $term = $params->q;
+                $query->where(function ($sub) use ($term) {
+                    $sub->where('serie', 'ilike', "%{$term}%")
+                        ->orWhereRaw("LPAD(numero::text, 7, '0') ilike ?", ["%{$term}%"])
+                        ->orWhereHas('tipoDocumento', function ($tq) use ($term) {
+                            $tq->where('codigo', 'ilike', "%{$term}%")
+                                ->orWhere('descripcion', 'ilike', "%{$term}%");
                         });
                 });
             }
 
-            return $query->orderBy('serie')
-                ->orderBy('numero')
-                ->paginate($perPage, ['*'], 'page', $page)
-                ->appends([
-                    'per_page' => $perPage,
-                    'q' => $q,
-                    'status' => $status,
-                ]);
+            $this->applyListingSort($query, $params, ['serie', 'numero', 'estado'], 'serie');
+
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 

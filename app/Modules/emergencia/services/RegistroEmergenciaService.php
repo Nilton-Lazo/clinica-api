@@ -2,6 +2,8 @@
 
 namespace App\Modules\emergencia\services;
 
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\NroCuentaService;
 use App\Core\support\CodigoCorrelativo;
 use App\Core\realtime\RealtimeBroadcaster;
@@ -18,6 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 class RegistroEmergenciaService
 {
+    use AppliesListingQuery;
+
     public function __construct(
         private NroCuentaService $nroCuentaService,
         private CuentaSyncService $cuentaSyncService,
@@ -32,50 +36,39 @@ class RegistroEmergenciaService
         return (int) Cache::get(self::CACHE_VERSION_KEY, 0);
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int) ($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int) ($filters['page'] ?? 1));
-        $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-        $fechaDesde = isset($filters['fecha_desde']) ? trim((string) $filters['fecha_desde']) : null;
-        $fechaHasta = isset($filters['fecha_hasta']) ? trim((string) $filters['fecha_hasta']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('emergencia:registro:index:%s:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $fechaDesde ?? '', $fechaHasta ?? '');
+        $cacheKey = 'emergencia:registro:index:'.$version.':'.$params->toCacheKey('v2');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-            $fechaDesde = isset($filters['fecha_desde']) ? trim((string) $filters['fecha_desde']) : null;
-            $fechaHasta = isset($filters['fecha_hasta']) ? trim((string) $filters['fecha_hasta']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = RegistroEmergencia::query()
-                ->with(['tipoEmergencia:id,codigo,descripcion'])
-                ->orderBy('fecha', 'desc')
-                ->orderBy('orden', 'asc')
-                ->orderBy('id', 'desc');
+                ->with(['tipoEmergencia:id,codigo,descripcion']);
 
-            if ($fechaDesde !== null && $fechaDesde !== '') {
+            $fechaDesde = $params->filter('fecha_desde');
+            $fechaHasta = $params->filter('fecha_hasta');
+            if (is_string($fechaDesde) && $fechaDesde !== '') {
                 $query->whereDate('fecha', '>=', $fechaDesde);
             }
-            if ($fechaHasta !== null && $fechaHasta !== '') {
+            if (is_string($fechaHasta) && $fechaHasta !== '') {
                 $query->whereDate('fecha', '<=', $fechaHasta);
             }
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('orden', 'ilike', "%{$q}%")
-                        ->orWhere('numero_hc', 'ilike', "%{$q}%")
-                        ->orWhere('apellidos_nombres', 'ilike', "%{$q}%")
-                        ->orWhere('numero_cuenta', 'ilike', "%{$q}%");
-                });
+
+            $this->applyListingSearch($query, $params, ['orden', 'numero_hc', 'apellidos_nombres', 'numero_cuenta']);
+
+            $sort = $params->sort ?? 'orden';
+            $allowed = ['orden', 'hora', 'numero_hc', 'numero_cuenta', 'apellidos_nombres', 'sexo', 'topico', 'estado'];
+            if (! in_array($sort, $allowed, true)) {
+                $sort = 'orden';
+            }
+            $dir = $params->sortDir === 'desc' ? 'desc' : 'asc';
+            if ($sort === 'orden') {
+                $query->orderBy('fecha', $dir)->orderBy('orden', $dir);
+            } else {
+                $query->orderBy($sort, $dir);
             }
 
-            $paginator = $query->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'fecha_desde' => $fechaDesde,
-                'fecha_hasta' => $fechaHasta,
-            ]);
+            $paginator = $query->orderBy('id', $dir)->paginate($params->perPage, ['*'], 'page', $params->page);
 
             $paginator->getCollection()->transform(function ($registro) {
                 $paciente = \App\Modules\admision\models\Paciente::query()

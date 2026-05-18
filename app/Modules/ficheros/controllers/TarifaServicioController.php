@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\ParametroSistema;
 use App\Modules\admision\models\Tarifa;
@@ -44,9 +45,13 @@ class TarifaServicioController extends Controller
     {
         $this->authorize('viewAny', [TarifaServicio::class, $tarifa]);
 
-        $p = $this->service->paginate($tarifa, $request->only([
-            'q', 'status', 'categoria_id', 'subcategoria_id', 'grupo_codigo', 'per_page', 'page'
-        ]));
+        $params = GridParams::fromRequest(
+            $request,
+            ['codigo', 'descripcion', 'estado', 'precio_sin_igv', 'precio_con_igv', 'unidad'],
+            'codigo'
+        );
+
+        $p = $this->service->paginate($tarifa, $params);
 
         $igv = ParametroSistema::getIgvPorcentaje();
 

@@ -3,6 +3,8 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\RecordStatus;
 use App\Core\support\CodigoCorrelativo;
@@ -18,6 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaServicioService
 {
+    use AppliesListingQuery;
+
     public ?PropagacionResultado $lastPropagationResult = null;
 
     public function __construct(
@@ -132,55 +136,39 @@ class TarifaServicioService
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
 
-    public function paginate(Tarifa $tarifa, array $filters): LengthAwarePaginator
+    public function paginate(Tarifa $tarifa, GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
+        $cacheKey = 'tarifario:svc:index:' . $tarifa->id . ':' . $params->toCacheKey('v1');
 
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-        $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
-        $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : 0;
-        $grupoCodigo = isset($filters['grupo_codigo']) ? trim((string)$filters['grupo_codigo']) : null;
-
-        $cacheKey = sprintf('tarifario:svc:index:%s:%s:%s:%s:%s:%s:%s:%s', $tarifa->id, $page, $perPage, $q ?? '', $status ?? '', $categoriaId, $subcategoriaId, $grupoCodigo ?? '');
-
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-            $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
-            $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : 0;
-            $grupoCodigo = isset($filters['grupo_codigo']) ? trim((string)$filters['grupo_codigo']) : null;
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $params) {
+            $categoriaId = (int) ($params->filter('categoria_id') ?? 0);
+            $subcategoriaId = (int) ($params->filter('subcategoria_id') ?? 0);
+            $grupoCodigo = $params->filter('grupo_codigo');
+            $grupoCodigo = is_string($grupoCodigo) ? trim($grupoCodigo) : '';
 
             $query = TarifaServicio::query()->where('tarifa_id', $tarifa->id);
 
-            if ($categoriaId > 0) $query->where('categoria_id', $categoriaId);
-            if ($subcategoriaId > 0) $query->where('subcategoria_id', $subcategoriaId);
-            if ($grupoCodigo !== null && $grupoCodigo !== '') {
+            if ($categoriaId > 0) {
+                $query->where('categoria_id', $categoriaId);
+            }
+            if ($subcategoriaId > 0) {
+                $query->where('subcategoria_id', $subcategoriaId);
+            }
+            if ($grupoCodigo !== '') {
                 $query->where('grupo_codigo', $grupoCodigo);
             }
 
-            if ($status && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['codigo', 'descripcion', 'nomenclador']);
+            $this->applyListingSort(
+                $query,
+                $params,
+                ['codigo', 'descripcion', 'estado', 'precio_sin_igv', 'precio_con_igv', 'unidad'],
+                'codigo',
+                ['precio_con_igv' => 'precio_sin_igv']
+            );
 
-            if ($q) {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('descripcion', 'ilike', "%{$q}%")
-                        ->orWhere('nomenclador', 'ilike', "%{$q}%");
-                });
-            }
-
-            return CodigoCorrelativo::orderByCodigoAsc($query)->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-                'categoria_id' => $categoriaId,
-                'subcategoria_id' => $subcategoriaId,
-                'grupo_codigo' => $grupoCodigo,
-            ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 

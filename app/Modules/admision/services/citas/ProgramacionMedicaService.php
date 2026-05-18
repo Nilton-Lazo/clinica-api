@@ -3,6 +3,8 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\ModalidadFechasProgramacion;
 use App\Core\support\RecordStatus;
@@ -18,22 +20,15 @@ use Illuminate\Validation\ValidationException;
 
 class ProgramacionMedicaService
 {
+    use AppliesListingQuery;
+
     public function __construct(
         private AuditService $audit,
         private RealtimeBroadcaster $realtime,
     ) {}
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-        $from = isset($filters['from']) ? trim((string)$filters['from']) : null;
-        $to = isset($filters['to']) ? trim((string)$filters['to']) : null;
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-
         $query = ProgramacionMedica::query()->with([
             'especialidad:id,codigo,descripcion',
             'medico:id,nombres,apellido_paterno,apellido_materno,tiempo_promedio_por_paciente',
@@ -41,33 +36,30 @@ class ProgramacionMedicaService
             'consultorio:id,abreviatura,descripcion',
         ]);
 
-        if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
-        }
+        $this->applyListingStatus($query, $params);
 
-        if ($from !== null && $from !== '') {
+        $from = $params->filter('from');
+        $to = $params->filter('to');
+        if (is_string($from) && $from !== '') {
             $query->whereDate('fecha', '>=', $from);
         }
-
-        if ($to !== null && $to !== '') {
+        if (is_string($to) && $to !== '') {
             $query->whereDate('fecha', '<=', $to);
         }
 
-        if ($q !== null && $q !== '') {
-            $this->applySearch($query, $q);
+        if ($params->q !== null && $params->q !== '') {
+            $this->applySearch($query, $params->q);
         }
 
-        return $query
-            ->orderBy('fecha', 'asc')
-            ->orderBy('turno_id')
-            ->paginate($perPage)
-            ->appends([
-                'per_page' => $perPage,
-                'status' => $status,
-                'from' => $from,
-                'to' => $to,
-                'q' => $q,
-            ]);
+        $this->applyListingSort(
+            $query,
+            $params,
+            ['codigo', 'fecha', 'cupos', 'estado'],
+            'fecha',
+            ['codigo' => 'codigo']
+        );
+
+        return $query->orderBy('turno_id')->paginate($params->perPage, ['*'], 'page', $params->page);
     }
 
     public function calcularCupos(int $medicoId, int $turnoId): array

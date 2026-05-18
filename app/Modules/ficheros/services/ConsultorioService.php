@@ -3,6 +3,8 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Consultorio;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -11,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class ConsultorioService
 {
+    use AppliesListingQuery;
+
     public function __construct(private AuditService $audit) {}
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
@@ -26,40 +30,18 @@ class ConsultorioService
         Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:consultorios:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:consultorios:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = Consultorio::query();
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['abreviatura', 'descripcion']);
+            $this->applyListingSort($query, $params, ['abreviatura', 'descripcion', 'estado'], 'abreviatura');
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('abreviatura', 'ilike', "%{$q}%")
-                        ->orWhere('descripcion', 'ilike', "%{$q}%");
-                });
-            }
-
-            return $query->orderBy('abreviatura')->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-            ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 

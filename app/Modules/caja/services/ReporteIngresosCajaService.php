@@ -23,7 +23,7 @@ class ReporteIngresosCajaService
         private CajaNumeracionComprobanteService $numeracion,
     ) {}
 
-    public function bootstrap(User $actor, ?int $aperturasPage = null): array
+    public function bootstrap(User $actor, ?int $aperturasPage = null, ?string $sort = null, string $sortDir = 'desc'): array
     {
         $rawSeries = $this->numeracion->listAllActivosForEmision();
         $series = [];
@@ -74,38 +74,37 @@ class ReporteIngresosCajaService
             ->orderByDesc('id')
             ->first();
 
-        $perPageAperturas = 7;
-        $idsOrdered = CajaApertura::query()
+        $perPageAperturas = 5;
+        $aperturasQuery = CajaApertura::query()
             ->where('user_recepciona_id', $actor->id)
-            ->orderByDesc('apertura_at')
-            ->orderByDesc('id')
-            ->pluck('id');
+            ->with(['userRecepciona:id,username']);
 
-        $totalAperturas = $idsOrdered->count();
+        $this->applyReporteAperturasSort($aperturasQuery, $sort, $sortDir);
+
+        $totalAperturas = (clone $aperturasQuery)->count();
         $lastPageAperturas = max(1, (int) ceil(max(1, $totalAperturas) / $perPageAperturas));
 
         $pageAperturas = 1;
         if ($aperturasPage !== null) {
             $pageAperturas = max(1, min((int) $aperturasPage, $lastPageAperturas));
-        } elseif ($abierta !== null) {
+        } elseif ($abierta !== null && ($sort === null || $sort === '')) {
+            $idsOrdered = CajaApertura::query()
+                ->where('user_recepciona_id', $actor->id)
+                ->orderByDesc('apertura_at')
+                ->orderByDesc('id')
+                ->pluck('id');
             $idx = $idsOrdered->search(fn ($id) => (int) $id === (int) $abierta->id);
             if ($idx !== false) {
                 $pageAperturas = (int) floor((int) $idx / $perPageAperturas) + 1;
             }
         }
 
-        $sliceIds = $idsOrdered->slice(($pageAperturas - 1) * $perPageAperturas, $perPageAperturas)->values();
-        $rowsById = $sliceIds->isEmpty()
-            ? collect()
-            : CajaApertura::query()
-                ->whereIn('id', $sliceIds->all())
-                ->with(['userRecepciona:id,username'])
-                ->get()
-                ->keyBy('id');
+        $aperturasRows = (clone $aperturasQuery)
+            ->forPage($pageAperturas, $perPageAperturas)
+            ->get();
 
         $aperturas = [];
-        foreach ($sliceIds as $aid) {
-            $a = $rowsById->get($aid);
+        foreach ($aperturasRows as $a) {
             if (! $a) {
                 continue;
             }
@@ -156,8 +155,15 @@ class ReporteIngresosCajaService
         ];
     }
 
-    public function movimientos(User $actor, int $cajaAperturaId, ?string $numeracionId, int $page = 1, int $perPage = 25): array
-    {
+    public function movimientos(
+        User $actor,
+        int $cajaAperturaId,
+        ?string $numeracionId,
+        int $page = 1,
+        int $perPage = 25,
+        ?string $sort = null,
+        string $sortDir = 'asc',
+    ): array {
         $a = CajaApertura::query()->whereKey($cajaAperturaId)->first();
         if (! $a) {
             throw ValidationException::withMessages([
@@ -464,6 +470,8 @@ class ReporteIngresosCajaService
 
         $totalGeneral = array_sum(array_map(fn ($v) => (float) $v, $totalesPorMedio));
 
+        $movimientos = $this->sortReporteMovimientos($movimientos, $sort, $sortDir);
+
         $totalFilas = count($movimientos);
         $perPage = max(1, min($perPage, 100));
         $lastPage = max(1, (int) ceil($totalFilas / $perPage));
@@ -487,6 +495,98 @@ class ReporteIngresosCajaService
             ],
             'total_general' => number_format($totalGeneral, 2, '.', ''),
         ];
+    }
+
+    private function applyReporteAperturasSort($query, ?string $sort, string $sortDir): void
+    {
+        $dir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
+        $col = $sort ?? 'fecha';
+
+        switch ($col) {
+            case 'codigo':
+                $qualified = $query->getModel()->qualifyColumn('codigo');
+                if ($dir === 'asc') {
+                    CodigoCorrelativo::orderByCodigoAsc($query, $qualified);
+                    $query->orderBy($query->getModel()->getQualifiedKeyName(), 'asc');
+                } else {
+                    $query->orderByRaw(
+                        "(CASE WHEN {$qualified} ~ '^[0-9]+\$' THEN {$qualified}::bigint END) DESC NULLS LAST, {$qualified} DESC"
+                    )->orderByDesc($query->getModel()->getQualifiedKeyName());
+                }
+                break;
+            case 'usuario':
+                $query->orderBy(
+                    \App\Models\User::query()
+                        ->select('username')
+                        ->whereColumn('users.id', 'caja_aperturas.user_recepciona_id')
+                        ->limit(1),
+                    $dir
+                )->orderBy($query->getModel()->getQualifiedKeyName(), $dir);
+                break;
+            case 'monto_apertura':
+                $query->orderBy('monto_inicio', $dir)->orderBy('id', $dir);
+                break;
+            case 'monto_cierre':
+                $query->orderBy('monto_cierre', $dir)->orderBy('id', $dir);
+                break;
+            case 'estado':
+                $query->orderByRaw(
+                    $dir === 'asc'
+                        ? 'CASE WHEN cerrada_at IS NULL THEN 0 ELSE 1 END ASC, id ASC'
+                        : 'CASE WHEN cerrada_at IS NULL THEN 0 ELSE 1 END DESC, id DESC'
+                );
+                break;
+            case 'tipo':
+                $query->orderBy('tipo', $dir)->orderBy('id', $dir);
+                break;
+            case 'fecha':
+            default:
+                $query->orderBy('apertura_at', $dir)->orderBy('id', $dir);
+                break;
+        }
+    }
+
+    private function sortReporteMovimientos(array $rows, ?string $sort, string $sortDir): array
+    {
+        if ($sort === null || $sort === '') {
+            return $rows;
+        }
+
+        $factor = strtolower($sortDir) === 'desc' ? -1 : 1;
+
+        usort($rows, function (array $a, array $b) use ($sort, $factor): int {
+            $av = $this->movimientoSortValue($a, $sort);
+            $bv = $this->movimientoSortValue($b, $sort);
+
+            if (is_float($av) || is_float($bv)) {
+                $cmp = ($av <=> $bv) * $factor;
+
+                return $cmp !== 0 ? $cmp : strcmp((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''));
+            }
+
+            $cmp = strcasecmp((string) $av, (string) $bv) * $factor;
+
+            return $cmp !== 0 ? $cmp : strcmp((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''));
+        });
+
+        return $rows;
+    }
+
+    private function movimientoSortValue(array $row, string $sort): string|float
+    {
+        return match ($sort) {
+            'nro_cuenta' => (string) ($row['cuenta'] ?? ''),
+            'paciente' => (string) ($row['paciente'] ?? ''),
+            'medico' => (string) ($row['medico'] ?? ''),
+            'tipo_comprobante' => (string) ($row['tipo_comprobante'] ?? ''),
+            'num_comprobante' => (string) ($row['num_comprobante'] ?? ''),
+            'total', 'pago_fracc' => (float) str_replace(',', '.', (string) ($row[$sort === 'pago_fracc' ? 'pago_fracc' : 'total'] ?? '0')),
+            'estado' => (string) ($row['estado'] ?? ''),
+            'medio_pago' => (string) ($row['medio_pago'] ?? ''),
+            'origen_sigla' => (string) ($row['origen_sigla'] ?? ''),
+            'adelanto' => (string) ($row['adelanto'] ?? ''),
+            default => (string) ($row[$sort] ?? ''),
+        };
     }
 
     private function medioNombreDesdeEtiquetaCompuesta(string $raw): string
