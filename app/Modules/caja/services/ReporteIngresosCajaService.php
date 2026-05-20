@@ -19,11 +19,38 @@ use Illuminate\Validation\ValidationException;
 
 class ReporteIngresosCajaService
 {
+    public const MOVIMIENTOS_SORT_COLUMNS = [
+        'nro_cuenta',
+        'paciente',
+        'medico',
+        'tipo_comprobante',
+        'tipo_documento',
+        'num_comprobante',
+        'total',
+        'estado',
+        'pago_fracc',
+        'medio_pago',
+        'origen_sigla',
+        'tipo_origen',
+        'adelanto',
+        'usuario_elimina',
+    ];
+
+    public const APERTURAS_SORT_COLUMNS = [
+        'codigo',
+        'usuario',
+        'fecha',
+        'monto_apertura',
+        'monto_cierre',
+        'estado',
+        'tipo',
+    ];
+
     public function __construct(
         private CajaNumeracionComprobanteService $numeracion,
     ) {}
 
-    public function bootstrap(User $actor, ?int $aperturasPage = null, ?string $sort = null, string $sortDir = 'desc'): array
+    public function bootstrap(User $actor, ?int $aperturasPage = null, ?int $aperturasPerPage = null, ?string $sort = null, string $sortDir = 'desc'): array
     {
         $rawSeries = $this->numeracion->listAllActivosForEmision();
         $series = [];
@@ -74,7 +101,9 @@ class ReporteIngresosCajaService
             ->orderByDesc('id')
             ->first();
 
-        $perPageAperturas = 5;
+        $perPageAperturas = $aperturasPerPage !== null && $aperturasPerPage > 0
+            ? max(1, min((int) $aperturasPerPage, 100))
+            : 5;
         $aperturasQuery = CajaApertura::query()
             ->where('user_recepciona_id', $actor->id)
             ->with(['userRecepciona:id,username']);
@@ -470,6 +499,7 @@ class ReporteIngresosCajaService
 
         $totalGeneral = array_sum(array_map(fn ($v) => (float) $v, $totalesPorMedio));
 
+        $sort = $this->normalizeMovimientoSort($sort);
         $movimientos = $this->sortReporteMovimientos($movimientos, $sort, $sortDir);
 
         $totalFilas = count($movimientos);
@@ -572,6 +602,19 @@ class ReporteIngresosCajaService
         return $rows;
     }
 
+    private function normalizeMovimientoSort(?string $sort): ?string
+    {
+        if ($sort === null || $sort === '') {
+            return null;
+        }
+
+        return match ($sort) {
+            'tipo_origen' => 'origen_sigla',
+            'tipo_documento' => 'tipo_comprobante',
+            default => $sort,
+        };
+    }
+
     private function movimientoSortValue(array $row, string $sort): string|float
     {
         return match ($sort) {
@@ -585,6 +628,7 @@ class ReporteIngresosCajaService
             'medio_pago' => (string) ($row['medio_pago'] ?? ''),
             'origen_sigla' => (string) ($row['origen_sigla'] ?? ''),
             'adelanto' => (string) ($row['adelanto'] ?? ''),
+            'usuario_elimina' => (string) ($row['usuario_elimina'] ?? ''),
             default => (string) ($row[$sort] ?? ''),
         };
     }
