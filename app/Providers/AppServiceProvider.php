@@ -21,6 +21,16 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(\App\Core\audit\AuditContext::class)
             );
         });
+
+        $this->app->singleton(\App\Core\reporting\PdfReportRenderer::class);
+
+        $this->app->singleton(\App\Core\reporting\ReportExportResponse::class, function ($app) {
+            return new \App\Core\reporting\ReportExportResponse(
+                $app->make(\App\Core\reporting\PdfReportRenderer::class)
+            );
+        });
+
+        $this->app->singleton(\App\Core\clinica\services\ClinicaConfigService::class);
     }
 
     /**

@@ -563,4 +563,15 @@ class PacienteService
             'planes.tipoCliente.tarifa:id,es_precio_directo,codigo,descripcion_tarifa',
         ]);
     }
+
+    public function loadForFiliacionReport(Paciente $paciente): Paciente
+    {
+        return $paciente->load([
+            'paisNacionalidad:iso2,nombre',
+            'ubigeoNacimiento:codigo,departamento,provincia,distrito',
+            'ubigeoDomicilio:codigo,departamento,provincia,distrito',
+            'contactoEmergencia',
+            'medicoTratante:id,nombres,apellido_paterno,apellido_materno',
+        ]);
+    }
 }
