@@ -71,6 +71,24 @@ class CajaFormaPagoService
         });
     }
 
+    public function listAllActivosForEmision(int $limit = 2000): array
+    {
+        $limit = max(1, min(5000, $limit));
+
+        $rows = CodigoCorrelativo::orderByCodigoAsc(
+            CajaFormaPago::query()->where('estado', RecordStatus::ACTIVO->value)
+        )->limit($limit)->get();
+
+        return $rows->map(fn (CajaFormaPago $row) => [
+            'id' => (int) $row->id,
+            'codigo' => (string) $row->codigo,
+            'descripcion' => (string) $row->descripcion,
+            'estado' => (string) $row->estado,
+            'created_at' => $row->created_at?->toISOString(),
+            'updated_at' => $row->updated_at?->toISOString(),
+        ])->values()->all();
+    }
+
     public function create(array $data): CajaFormaPago
     {
         return DB::transaction(function () use ($data) {

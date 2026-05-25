@@ -169,6 +169,19 @@ class CajaBancoTarjetaService
         });
     }
 
+    public function listAllActivosForEmision(int $limit = 2000): array
+    {
+        $limit = max(1, min(5000, $limit));
+
+        $rows = CodigoCorrelativo::orderByCodigoAsc(
+            CajaBancoTarjeta::query()
+                ->with(['formasPago', 'mediosPago'])
+                ->where('estado', RecordStatus::ACTIVO->value)
+        )->limit($limit)->get();
+
+        return $rows->map(fn (CajaBancoTarjeta $row) => $this->toPayload($row))->values()->all();
+    }
+
     public function create(array $data): array
     {
         return DB::transaction(function () use ($data) {

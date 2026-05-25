@@ -2,7 +2,6 @@
 
 namespace App\Modules\caja\controllers;
 
-use App\Core\support\RecordStatus;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\CajaBancoTarjeta;
 use App\Modules\admision\models\CajaFormaPago;
@@ -18,6 +17,8 @@ use Illuminate\Support\Facades\Cache;
 
 class ComprobanteEmisionBootstrapController extends Controller
 {
+    private const CATALOG_LIMIT = 2000;
+
     public function __construct(
         private CajaFormaPagoService $formaPago,
         private CajaMedioPagoService $medioPago,
@@ -35,15 +36,6 @@ class ComprobanteEmisionBootstrapController extends Controller
         return 20;
     }
 
-    private static function listFilters(): array
-    {
-        return [
-            'page' => 1,
-            'per_page' => 100,
-            'status' => RecordStatus::ACTIVO->value,
-        ];
-    }
-
     public function bootstrap(): JsonResponse
     {
         $this->authorize('viewAny', CajaFormaPago::class);
@@ -52,21 +44,10 @@ class ComprobanteEmisionBootstrapController extends Controller
         $this->authorize('viewAny', CajaNumeracionComprobante::class);
 
         $payload = Cache::remember(self::cacheKey(), self::cacheTtlSeconds(), function () {
-            $f = self::listFilters();
-
-            $formasPaginator = $this->formaPago->paginate($f);
-            $formas = array_map(
-                static fn ($row) => $row->toArray(),
-                $formasPaginator->items()
-            );
-
-            $mediosPaginator = $this->medioPago->paginate($f);
-            $medios = $this->medioPago->serializePage($mediosPaginator)['data'];
-
-            $bancosPaginator = $this->bancoTarjeta->paginate($f);
-            $bancos = $this->bancoTarjeta->serializePage($bancosPaginator)['data'];
-
-            $numeraciones = $this->numeracion->listAllActivosForEmision();
+            $formas = $this->formaPago->listAllActivosForEmision(self::CATALOG_LIMIT);
+            $medios = $this->medioPago->listAllActivosForEmision(self::CATALOG_LIMIT);
+            $bancos = $this->bancoTarjeta->listAllActivosForEmision(self::CATALOG_LIMIT);
+            $numeraciones = $this->numeracion->listAllActivosForEmision(self::CATALOG_LIMIT);
 
             return [
                 'catalog' => ComprobanteEmisionCatalogPayload::build(),
