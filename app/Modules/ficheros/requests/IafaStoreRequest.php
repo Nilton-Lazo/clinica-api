@@ -26,7 +26,7 @@ class IafaStoreRequest extends FormRequest
 
             'razon_social' => ['required', 'string', 'max:255'],
             'descripcion_corta' => ['required', 'string', 'max:120'],
-            'ruc' => ['required', 'string', 'regex:/^\d{11}$/'],
+            'ruc' => ['required', 'string', 'regex:/^\d{11}$/', Rule::unique('iafas', 'ruc')],
 
             'direccion' => ['nullable', 'string', 'max:255'],
             'representante_legal' => ['nullable', 'string', 'max:150'],
@@ -55,6 +55,7 @@ class IafaStoreRequest extends FormRequest
             'descripcion_corta.max' => 'La descripción corta de la IAFAS no debe superar 120 caracteres.',
             'ruc.required' => 'Ingresa el RUC de la IAFAS.',
             'ruc.regex' => 'El RUC de la IAFAS debe tener 11 dígitos numéricos.',
+            'ruc.unique' => 'Ya existe una IAFAS registrada con este RUC.',
             'direccion.max' => 'La dirección de la IAFAS no debe superar 255 caracteres.',
             'representante_legal.max' => 'El representante legal de la IAFAS no debe superar 150 caracteres.',
             'telefono.max' => 'El teléfono de la IAFAS no debe superar 30 caracteres.',

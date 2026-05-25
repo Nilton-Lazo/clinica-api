@@ -12,8 +12,11 @@ return new class extends Migration
         DB::statement("
             SELECT setval(
                 'medicos_codigo_seq',
-                COALESCE((SELECT MAX(codigo::int) FROM medicos WHERE codigo ~ '^[0-9]+$'), 0),
-                true
+                GREATEST(
+                    COALESCE((SELECT MAX(codigo::int) FROM medicos WHERE codigo ~ '^[0-9]+$'), 1),
+                    1
+                ),
+                (SELECT COUNT(*) > 0 FROM medicos WHERE codigo ~ '^[0-9]+$')
             )
         ");
     }

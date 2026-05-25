@@ -6,9 +6,9 @@ use Illuminate\Http\Request;
 
 final class GridParams
 {
-    public const DEFAULT_PER_PAGE = 25;
+    public const DEFAULT_PER_PAGE = 10;
 
-    public const MAX_PER_PAGE = 100;
+    public const ALLOWED_PER_PAGE = [10, 20, 50];
 
     public function __construct(
         public readonly int $page,
@@ -28,7 +28,7 @@ final class GridParams
     {
         $page = max(1, (int) $request->input('page', 1));
         $perPage = (int) $request->input('per_page', self::DEFAULT_PER_PAGE);
-        $perPage = max(1, min(self::MAX_PER_PAGE, $perPage));
+        $perPage = in_array($perPage, self::ALLOWED_PER_PAGE, true) ? $perPage : self::DEFAULT_PER_PAGE;
 
         $q = $request->input('q');
         $q = is_string($q) ? trim($q) : null;

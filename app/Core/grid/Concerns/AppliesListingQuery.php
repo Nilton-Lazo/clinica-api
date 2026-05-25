@@ -9,21 +9,32 @@ use Illuminate\Database\Eloquent\Builder;
 
 trait AppliesListingQuery
 {
+    protected function listingLikeOperator(Builder $query): string
+    {
+        return $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+    }
+
+    protected function listingLikePattern(string $term): string
+    {
+        return '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term) . '%';
+    }
+
     protected function applyListingSearch(Builder $query, GridParams $params, array $columns): Builder
     {
         if ($params->q === null) {
             return $query;
         }
 
-        $term = $params->q;
+        $term = $this->listingLikePattern($params->q);
+        $operator = $this->listingLikeOperator($query);
 
-        return $query->where(function (Builder $sub) use ($columns, $term) {
+        return $query->where(function (Builder $sub) use ($columns, $operator, $term) {
             foreach ($columns as $index => $column) {
                 if ($index === 0) {
-                    $sub->where($column, 'ilike', "%{$term}%");
+                    $sub->where($column, $operator, $term);
                     continue;
                 }
-                $sub->orWhere($column, 'ilike', "%{$term}%");
+                $sub->orWhere($column, $operator, $term);
             }
         });
     }

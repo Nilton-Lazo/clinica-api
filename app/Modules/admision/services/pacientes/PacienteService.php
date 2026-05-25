@@ -111,6 +111,44 @@ class PacienteService
         return $query->orderBy('id', $dir)->paginate($params->perPage, ['*'], 'page', $params->page);
     }
 
+    public function paginatePlans(Paciente $paciente, GridParams $params): LengthAwarePaginator
+    {
+        $query = PacientePlan::query()
+            ->where('paciente_id', (int) $paciente->id)
+            ->with([
+                'tipoCliente:id,codigo,descripcion_tipo_cliente,iafa_id,contratante_id,tarifa_id',
+                'tipoCliente.tarifa:id,codigo,descripcion_tarifa,es_precio_directo',
+            ]);
+
+        $this->applyListingStatus($query, $params);
+
+        if ($params->q !== null) {
+            $term = $this->listingLikePattern($params->q);
+            $operator = $this->listingLikeOperator($query);
+            $query->where(function ($sub) use ($term, $operator) {
+                $sub->where('parentesco_seguro', $operator, $term)
+                    ->orWhereHas('tipoCliente', function ($tipo) use ($term, $operator) {
+                        $tipo->where('codigo', $operator, $term)
+                            ->orWhere('descripcion_tipo_cliente', $operator, $term)
+                            ->orWhereHas('tarifa', function ($tarifa) use ($term, $operator) {
+                                $tarifa->where('codigo', $operator, $term)
+                                    ->orWhere('descripcion_tarifa', $operator, $term);
+                            });
+                    });
+            });
+        }
+
+        $sort = $params->sort ?? 'id';
+        if (! in_array($sort, ['fecha_afiliacion', 'parentesco_seguro', 'estado', 'id'], true)) {
+            $sort = 'id';
+        }
+
+        return $query
+            ->orderBy($sort, $params->sortDir)
+            ->orderBy('id', $params->sortDir)
+            ->paginate($params->perPage, ['*'], 'page', $params->page);
+    }
+
     private function fullName(Paciente $p): string
     {
         $x = trim((string)$p->nombre_completo);

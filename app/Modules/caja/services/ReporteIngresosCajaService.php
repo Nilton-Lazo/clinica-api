@@ -102,7 +102,7 @@ class ReporteIngresosCajaService
             ->first();
 
         $perPageAperturas = $aperturasPerPage !== null && $aperturasPerPage > 0
-            ? max(1, min((int) $aperturasPerPage, 100))
+            ? max(1, min((int) $aperturasPerPage, 50))
             : 5;
         $aperturasQuery = CajaApertura::query()
             ->where('user_recepciona_id', $actor->id)
@@ -189,7 +189,7 @@ class ReporteIngresosCajaService
         int $cajaAperturaId,
         ?string $numeracionId,
         int $page = 1,
-        int $perPage = 25,
+        int $perPage = 10,
         ?string $sort = null,
         string $sortDir = 'asc',
     ): array {
@@ -205,8 +205,11 @@ class ReporteIngresosCajaService
             ]);
         }
 
+        $numeracionFiltroId = $numeracionId !== null && ctype_digit($numeracionId) ? (int) $numeracionId : null;
+
         $emisiones = CajaEmisionComprobante::query()
             ->where('caja_apertura_id', $a->id)
+            ->when($numeracionFiltroId !== null, fn ($query) => $query->where('numeracion_comprobante_id', $numeracionFiltroId))
             ->with([
                 'pagos.medioPago:id,codigo,descripcion',
                 'numeracionComprobante.tipoDocumento:id,codigo,descripcion',
@@ -503,7 +506,7 @@ class ReporteIngresosCajaService
         $movimientos = $this->sortReporteMovimientos($movimientos, $sort, $sortDir);
 
         $totalFilas = count($movimientos);
-        $perPage = max(1, min($perPage, 100));
+        $perPage = max(1, min($perPage, 50));
         $lastPage = max(1, (int) ceil($totalFilas / $perPage));
         $page = max(1, min($page, $lastPage));
         $offset = ($page - 1) * $perPage;

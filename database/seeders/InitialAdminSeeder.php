@@ -16,7 +16,7 @@ class InitialAdminSeeder extends Seeder
 
         User::create([
             'name' => 'Administrador General',
-            'username' => 'admin',
+            'username' => 'ADMIN',
             'nombres' => 'Administrador',
             'apellido_paterno' => 'General',
             'apellido_materno' => null,

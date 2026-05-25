@@ -21,7 +21,7 @@ class ReporteIngresosCajaController extends Controller
 
         $v = $request->validate([
             'aperturas_page' => ['sometimes', 'integer', 'min:1'],
-            'aperturas_per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'aperturas_per_page' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'sort' => ['sometimes', 'nullable', 'string', Rule::in(ReporteIngresosCajaService::APERTURAS_SORT_COLUMNS)],
             'sort_dir' => ['sometimes', 'string', 'in:asc,desc'],
         ], [
@@ -48,7 +48,7 @@ class ReporteIngresosCajaController extends Controller
             'caja_apertura_id' => ['required', 'integer', 'exists:caja_aperturas,id'],
             'numeracion_id' => ['nullable', 'string', 'max:32'],
             'page' => ['sometimes', 'integer', 'min:1'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'sort' => ['sometimes', 'nullable', 'string', Rule::in(ReporteIngresosCajaService::MOVIMIENTOS_SORT_COLUMNS)],
             'sort_dir' => ['sometimes', 'string', 'in:asc,desc'],
         ], [
@@ -72,7 +72,7 @@ class ReporteIngresosCajaController extends Controller
             (int) $v['caja_apertura_id'],
             isset($v['numeracion_id']) ? trim((string) $v['numeracion_id']) : null,
             isset($v['page']) ? (int) $v['page'] : 1,
-            isset($v['per_page']) ? (int) $v['per_page'] : 25,
+            isset($v['per_page']) ? (int) $v['per_page'] : 10,
             $sort,
             $sortDir,
         );

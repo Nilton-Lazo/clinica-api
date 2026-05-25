@@ -45,6 +45,20 @@ class PacienteController extends Controller
         return response()->json(['data' => $full]);
     }
 
+    public function plans(Request $request, Paciente $paciente)
+    {
+        $this->authorize('view', $paciente);
+
+        $params = GridParams::fromRequest($request, [
+            'fecha_afiliacion',
+            'parentesco_seguro',
+            'estado',
+            'id',
+        ], 'id');
+
+        return GridResponse::fromPaginator($this->service->paginatePlans($paciente, $params));
+    }
+
     public function store(PacienteStoreRequest $request)
     {
         $this->authorize('create', Paciente::class);

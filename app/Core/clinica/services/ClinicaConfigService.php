@@ -11,18 +11,24 @@ class ClinicaConfigService
 {
     public function actual(): ?Clinica
     {
-        $ttl = max(60, (int) config('reports.institution_cache_ttl_seconds', 300));
-
-        return Cache::remember('clinica:actual', $ttl, function () {
-            return Clinica::query()
-                ->activos()
-                ->orderBy('id')
-                ->first();
-        });
+        return Clinica::query()
+            ->activos()
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
     }
 
     public function actualOrFail(): Clinica
     {
+        $activeCount = Clinica::query()->activos()->count();
+        if ($activeCount > 1) {
+            throw ValidationException::withMessages([
+                'clinica' => [
+                    'Hay más de una clínica activa configurada. Deja una sola clínica activa antes de generar reportes.',
+                ],
+            ]);
+        }
+
         $row = $this->actual();
         if ($row === null) {
             throw ValidationException::withMessages([
@@ -37,11 +43,7 @@ class ClinicaConfigService
 
     public function reportContext(): InstitutionReportContext
     {
-        $ttl = max(60, (int) config('reports.institution_cache_ttl_seconds', 300));
-
-        return Cache::remember('clinica:report-context', $ttl, function () {
-            return InstitutionReportContext::fromClinica($this->actualOrFail());
-        });
+        return InstitutionReportContext::fromClinica($this->actualOrFail());
     }
 
     public function forgetCache(): void

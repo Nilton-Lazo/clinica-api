@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Core\grid;
+namespace App\Core\lookup;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 
-final class GridResponse
+final class LookupResponse
 {
-    public static function fromPaginator(LengthAwarePaginator $paginator, ?callable $transformer = null, array $extraMeta = []): JsonResponse
+    public static function fromPaginator(LengthAwarePaginator $paginator, ?callable $transformer = null): JsonResponse
     {
         $items = $paginator->items();
 
@@ -17,12 +17,13 @@ final class GridResponse
 
         return response()->json([
             'data' => $items,
-            'meta' => array_merge([
+            'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
                 'last_page' => $paginator->lastPage(),
-            ], $extraMeta),
+                'has_more' => $paginator->currentPage() < $paginator->lastPage(),
+            ],
         ]);
     }
 }

@@ -12,6 +12,7 @@ use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\RegistroEmergencia;
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\services\citas\CuentaSyncService;
+use App\Modules\caja\models\CajaEmisionComprobante;
 use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -70,20 +71,78 @@ class RegistroEmergenciaService
 
             $paginator = $query->orderBy('id', $dir)->paginate($params->perPage, ['*'], 'page', $params->page);
 
-            $paginator->getCollection()->transform(function ($registro) {
-                $paciente = \App\Modules\admision\models\Paciente::query()
-                    ->select(['id', 'fecha_nacimiento', 'sexo'])
-                    ->where(function ($q) use ($registro) {
-                        $q->where('numero_documento', $registro->numero_hc)
-                          ->orWhere('nr', $registro->numero_hc);
-                    })
-                    ->first();
-                
-                $edad = $paciente ? $paciente->edad : null;
-                $registro->setAttribute('edad_paciente', $edad);
-                if ($this->isCuentaCancelada($registro)) {
+            $registros = $paginator->getCollection();
+            $historias = $registros
+                ->pluck('numero_hc')
+                ->map(static fn ($value) => trim((string) $value))
+                ->filter(static fn ($value) => $value !== '')
+                ->unique()
+                ->values();
+
+            $pacientes = $historias->isEmpty()
+                ? collect()
+                : Paciente::query()
+                    ->select(['id', 'numero_documento', 'nr', 'fecha_nacimiento', 'sexo'])
+                    ->whereIn('numero_documento', $historias)
+                    ->orWhereIn('nr', $historias)
+                    ->get();
+
+            $pacientesPorClave = [];
+            foreach ($pacientes as $paciente) {
+                foreach (['numero_documento', 'nr'] as $field) {
+                    $key = trim((string) ($paciente->{$field} ?? ''));
+                    if ($key !== '' && ! isset($pacientesPorClave[$key])) {
+                        $pacientesPorClave[$key] = $paciente;
+                    }
+                }
+            }
+
+            $registroIds = $registros->pluck('id')->map(static fn ($id) => (int) $id)->filter()->values();
+            $cuentasPorRegistro = $registroIds->isEmpty()
+                ? collect()
+                : Cuenta::query()
+                    ->select(['id', 'origen_id', 'nro_cuenta', 'estado'])
+                    ->where('origen', CuentaOrigen::REGISTRO_EMERGENCIA->value)
+                    ->whereIn('origen_id', $registroIds)
+                    ->get()
+                    ->keyBy(static fn ($cuenta) => (int) $cuenta->origen_id);
+
+            $nrosCuenta = $registros
+                ->map(function ($registro) use ($cuentasPorRegistro) {
+                    $cuenta = $cuentasPorRegistro->get((int) $registro->id);
+                    return trim((string) ($cuenta?->nro_cuenta ?? $registro->numero_cuenta ?? ''));
+                })
+                ->filter(static fn ($value) => $value !== '')
+                ->unique()
+                ->values();
+
+            $cuentasFacturadas = [];
+            if ($nrosCuenta->isNotEmpty()) {
+                $emisiones = CajaEmisionComprobante::query()
+                    ->select(['id', 'nro_cuenta', 'snapshot'])
+                    ->whereIn('nro_cuenta', $nrosCuenta)
+                    ->orderBy('id')
+                    ->get();
+
+                foreach ($emisiones as $emision) {
+                    $nroCuenta = trim((string) $emision->nro_cuenta);
+                    if ($nroCuenta !== '' && ! EmisionComprobanteFacturacion::esAdelantoGarantia($emision)) {
+                        $cuentasFacturadas[$nroCuenta] = true;
+                    }
+                }
+            }
+
+            $registros->transform(function ($registro) use ($pacientesPorClave, $cuentasPorRegistro, $cuentasFacturadas) {
+                $paciente = $pacientesPorClave[trim((string) $registro->numero_hc)] ?? null;
+                $registro->setAttribute('edad_paciente', $paciente?->edad);
+                $cuenta = $cuentasPorRegistro->get((int) $registro->id);
+                $nroCuenta = trim((string) ($cuenta?->nro_cuenta ?? $registro->numero_cuenta ?? ''));
+                $estadoCuenta = strtoupper(trim((string) ($cuenta?->estado ?? '')));
+
+                if ($estadoCuenta === 'CANCELADO' || ($nroCuenta !== '' && isset($cuentasFacturadas[$nroCuenta]))) {
                     $registro->setAttribute('estado', 'CANCELADO');
                 }
+
                 return $registro;
             });
 

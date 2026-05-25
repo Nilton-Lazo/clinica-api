@@ -54,6 +54,7 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::get('{paciente}/bitacora-notas', [CuentaBitacoraNotaController::class, 'indexByPaciente'])->middleware('throttle:api');
         Route::post('{paciente}/bitacora-notas', [CuentaBitacoraNotaController::class, 'storeByPaciente'])->middleware('throttle:sensitive-write');
         Route::get('{paciente}/reporte-filiacion', [PacienteReportController::class, 'hojaFiliacion'])->middleware('throttle:api');
+        Route::get('{paciente}/planes', [PacienteController::class, 'plans'])->middleware('throttle:api');
         Route::get('{paciente}', [PacienteController::class, 'show'])->middleware('throttle:api');
     
         Route::post('', [PacienteController::class, 'store'])->middleware('throttle:sensitive-write');

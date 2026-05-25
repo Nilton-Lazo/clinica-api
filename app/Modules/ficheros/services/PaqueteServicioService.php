@@ -3,11 +3,14 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\GridParams;
 use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Paquete;
 use App\Modules\admision\models\Tarifa;
+use App\Modules\ficheros\queries\PaquetesPorTarifaQuery;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -17,15 +20,12 @@ class PaqueteServicioService
     public function __construct(
         private AuditService $audit,
         private RealtimeBroadcaster $realtime,
+        private PaquetesPorTarifaQuery $paquetesPorTarifaQuery,
     ) {}
 
-    public function listPaquetesPorTarifa(Tarifa $tarifa): Collection
+    public function paginatePaquetesPorTarifa(Tarifa $tarifa, GridParams $params): LengthAwarePaginator
     {
-        return Paquete::query()
-            ->where('tarifa_id', $tarifa->id)
-            ->where('estado', RecordStatus::ACTIVO->value)
-            ->orderByRaw('CAST(codigo AS INTEGER) ASC')
-            ->get(['id', 'codigo', 'descripcion', 'tarifa_id', 'estado', 'precio_sin_igv']);
+        return $this->paquetesPorTarifaQuery->paginate($tarifa, $params);
     }
 
     public function arbolServiciosPorTarifa(Tarifa $tarifa): array
