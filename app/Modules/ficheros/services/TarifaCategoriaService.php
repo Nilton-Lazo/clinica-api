@@ -58,10 +58,28 @@ class TarifaCategoriaService
     }
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
+    private const INDEX_CACHE_VERSION_PREFIX = 'tarifario:cat:index:version:';
+
+    public static function invalidateIndexCacheForTarifa(int $tarifaId): void
+    {
+        $key = self::INDEX_CACHE_VERSION_PREFIX . $tarifaId;
+        Cache::put($key, (int) Cache::get($key, 0) + 1, 86400);
+    }
+
+    public static function clearLookupCacheForTarifa(int $tarifaId): void
+    {
+        Cache::forget(sprintf('tarifario:cat:lookup:%s:1', $tarifaId));
+        Cache::forget(sprintf('tarifario:cat:lookup:%s:0', $tarifaId));
+    }
+
+    private function indexCacheVersion(Tarifa $tarifa): int
+    {
+        return (int) Cache::get(self::INDEX_CACHE_VERSION_PREFIX . $tarifa->id, 0);
+    }
 
     public function paginate(Tarifa $tarifa, GridParams $params): LengthAwarePaginator
     {
-        $cacheKey = 'tarifario:cat:index:' . $tarifa->id . ':' . $params->toCacheKey('v1');
+        $cacheKey = 'tarifario:cat:index:' . $this->indexCacheVersion($tarifa) . ':' . $tarifa->id . ':' . $params->toCacheKey('v1');
 
         return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $params) {
             $query = TarifaCategoria::query()->where('tarifa_id', $tarifa->id);
@@ -97,8 +115,16 @@ class TarifaCategoriaService
 
     public function clearLookupCache(Tarifa $tarifa): void
     {
-        Cache::forget(sprintf('tarifario:cat:lookup:%s:1', $tarifa->id));
-        Cache::forget(sprintf('tarifario:cat:lookup:%s:0', $tarifa->id));
+        self::clearLookupCacheForTarifa((int) $tarifa->id);
+    }
+
+    private function invalidateTarifarioCaches(Tarifa $tarifa): void
+    {
+        self::invalidateIndexCacheForTarifa((int) $tarifa->id);
+        TarifaSubcategoriaService::invalidateIndexCacheForTarifa((int) $tarifa->id);
+        TarifaServicioService::invalidateIndexCacheForTarifa((int) $tarifa->id);
+        TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int) $tarifa->id);
+        $this->clearLookupCache($tarifa);
     }
 
     public function create(Tarifa $tarifa, array $data): TarifaCategoria
@@ -154,7 +180,7 @@ class TarifaCategoriaService
                 201
             );
 
-            $this->clearLookupCache($tarifa);
+            $this->invalidateTarifarioCaches($tarifa);
             return $categoria;
         });
     }
@@ -240,6 +266,13 @@ class TarifaCategoriaService
 
         if (!empty($rows)) {
             DB::table('tarifa_categorias')->insert($rows);
+            foreach (array_unique(array_map(static fn ($row) => (int) $row['tarifa_id'], $rows)) as $tarifaId) {
+                self::invalidateIndexCacheForTarifa($tarifaId);
+                self::clearLookupCacheForTarifa($tarifaId);
+                TarifaSubcategoriaService::invalidateIndexCacheForTarifa($tarifaId);
+                TarifaServicioService::invalidateIndexCacheForTarifa($tarifaId);
+                TarifarioCatalogoService::invalidateServiciosCacheForTarifa($tarifaId);
+            }
         }
 
         return $result;
@@ -298,7 +331,7 @@ class TarifaCategoriaService
                 200
             );
 
-            $this->clearLookupCache($tarifa);
+            $this->invalidateTarifarioCaches($tarifa);
             return $categoria;
         });
     }
@@ -340,7 +373,7 @@ class TarifaCategoriaService
                 200
             );
 
-            $this->clearLookupCache($tarifa);
+            $this->invalidateTarifarioCaches($tarifa);
             return $categoria;
         });
     }

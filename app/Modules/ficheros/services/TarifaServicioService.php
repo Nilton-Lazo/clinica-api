@@ -135,10 +135,28 @@ class TarifaServicioService
     }
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
+    private const INDEX_CACHE_VERSION_PREFIX = 'tarifario:svc:index:version:';
+
+    public static function invalidateIndexCacheForTarifa(int $tarifaId): void
+    {
+        $key = self::INDEX_CACHE_VERSION_PREFIX . $tarifaId;
+        Cache::put($key, (int) Cache::get($key, 0) + 1, 86400);
+    }
+
+    private function indexCacheVersion(Tarifa $tarifa): int
+    {
+        return (int) Cache::get(self::INDEX_CACHE_VERSION_PREFIX . $tarifa->id, 0);
+    }
+
+    private function invalidateTarifarioCaches(Tarifa $tarifa): void
+    {
+        self::invalidateIndexCacheForTarifa((int) $tarifa->id);
+        TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int) $tarifa->id);
+    }
 
     public function paginate(Tarifa $tarifa, GridParams $params): LengthAwarePaginator
     {
-        $cacheKey = 'tarifario:svc:index:' . $tarifa->id . ':' . $params->toCacheKey('v1');
+        $cacheKey = 'tarifario:svc:index:' . $this->indexCacheVersion($tarifa) . ':' . $tarifa->id . ':' . $params->toCacheKey('v1');
 
         return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $params) {
             $categoriaId = (int) ($params->filter('categoria_id') ?? 0);
@@ -274,6 +292,8 @@ class TarifaServicioService
                 scope: (string) $tarifa->id,
                 metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
             );
+
+            $this->invalidateTarifarioCaches($tarifa);
 
             return $srv;
         });
@@ -444,6 +464,9 @@ class TarifaServicioService
                 scope: (string) $t->id,
                 metadata: ['tarifa_id' => (int) $t->id, 'codigo' => $created->codigo],
             );
+
+            self::invalidateIndexCacheForTarifa((int) $t->id);
+            TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int) $t->id);
         }
 
         return $result;
@@ -524,6 +547,8 @@ class TarifaServicioService
                 metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
             );
 
+            $this->invalidateTarifarioCaches($tarifa);
+
             return $srv;
         });
     }
@@ -563,6 +588,8 @@ class TarifaServicioService
                 scope: (string) $tarifa->id,
                 metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
             );
+
+            $this->invalidateTarifarioCaches($tarifa);
 
             return $srv;
         });
