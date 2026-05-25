@@ -2,9 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>@yield('report-title', 'Reporte')</title>
+    <title>@hasSection('document-title')@yield('document-title')@else@yield('report-title', 'Reporte')@endif</title>
     <style>
         @page {
+            size: A4 portrait;
             margin: 14mm 14mm 26mm 14mm;
         }
         * { box-sizing: border-box; }
@@ -162,6 +163,19 @@
             font-size: 8.5px;
         }
         .page-break { page-break-after: always; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+        }
+        table.report-sheet {
+            margin: 0;
+            background: #ffffff;
+        }
+        body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
     </style>
     @stack('report-styles')
 </head>

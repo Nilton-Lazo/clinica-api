@@ -31,9 +31,7 @@ class PacienteReportController extends Controller
         $meta = $this->filiacion->generationContext($request->user());
         $view = 'reports.admision.hoja-filiacion-paciente';
 
-        $wantsPreview = $request->boolean('preview')
-            && config('reports.preview_enabled')
-            && config('app.debug');
+        $wantsPreview = $request->boolean('preview') && config('reports.preview_enabled');
 
         if ($format === ReportFormat::Pdf && $wantsPreview) {
             return app(\App\Core\reporting\PdfReportRenderer::class)->renderHtml($view, $report, $meta);
@@ -41,6 +39,10 @@ class PacienteReportController extends Controller
 
         if ($format === ReportFormat::Pdf) {
             $filename = $this->filiacion->filenameForExport($report, $paciente, $format);
+
+            if ($request->boolean('inline')) {
+                return $this->exports->pdfInline($view, $report, $meta, $filename);
+            }
 
             return $this->exports->pdf($view, $report, $meta, $filename);
         }

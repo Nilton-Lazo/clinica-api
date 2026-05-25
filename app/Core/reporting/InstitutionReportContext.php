@@ -22,6 +22,7 @@ final class InstitutionReportContext
     public static function fromClinica(Clinica $clinica): self
     {
         [$logoUrl, $logoAbsolutePath] = ClinicaLogoResolver::resolve($clinica->logo_path);
+        $logoDataUri = ClinicaLogoResolver::dataUri($clinica->logo_path);
 
         return new self(
             name: trim((string) $clinica->razon_social),
@@ -32,7 +33,7 @@ final class InstitutionReportContext
             website: self::nullableString($clinica->sitio_web),
             logoUrl: $logoUrl,
             logoAbsolutePath: $logoAbsolutePath,
-            logoDataUri: null,
+            logoDataUri: $logoDataUri,
         );
     }
 

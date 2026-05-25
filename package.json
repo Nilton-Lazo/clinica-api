@@ -5,6 +5,9 @@
         "dev": "vite",
         "build": "vite build"
     },
+    "dependencies": {
+        "puppeteer": "^24.2.0"
+    },
     "devDependencies": {
         "axios": "^1.6.4",
         "laravel-vite-plugin": "^1.0.0",

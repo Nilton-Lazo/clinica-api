@@ -18,6 +18,7 @@ class PacienteFiliacionExportRequest extends FormRequest
         return [
             'format' => ['required', 'string', Rule::in([ReportFormat::Pdf->value])],
             'preview' => ['sometimes', 'boolean'],
+            'inline' => ['sometimes', 'boolean'],
         ];
     }
 

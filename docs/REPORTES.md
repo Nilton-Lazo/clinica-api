@@ -55,9 +55,9 @@ Tras editar la tabla: `php artisan cache:clear` o espera el TTL (`REPORT_INSTITU
 
 1. Fila activa en `clinica`.
 2. Iniciar sesión en el portal.
-3. Historia clínica → abrir paciente guardado → **Hoja de filiación**.
+3. Historia clínica → abrir paciente guardado → icono **Imprimir** (hoja de filiación).
 
-Eso descarga el PDF con token Sanctum automáticamente.
+Se abre la vista previa HTML; desde ahí el usuario puede **Imprimir** o, si lo desea, **Descargar PDF**.
 
 ### Pegar URL en el navegador
 
@@ -75,15 +75,32 @@ El navegador no envía el token del portal; por eso no sirve como método habitu
 curl -H "Authorization: Bearer TU_TOKEN" "http://192.168.1.35:8000/api/admision/pacientes/5/reporte-filiacion?format=pdf" -o hoja.pdf
 ```
 
-## Vista previa HTML (`REPORT_PREVIEW_ENABLED`)
+## Vista previa e impresión
 
-Solo para **desarrollo**: ver el diseño del PDF como página HTML antes de ajustar el Blade.
+La hoja de filiación usa la plantilla **`reports/layouts/pdf`** (diseño oficial con borde, pie fijo y márgenes A4). La misma plantilla alimenta:
 
-- No la usan los usuarios finales.
-- Requiere `APP_DEBUG=true`, `REPORT_PREVIEW_ENABLED=true` y token en la petición.
-- En producción dejar `REPORT_PREVIEW_ENABLED=false`.
+1. **Vista previa HTML** en el portal (`?preview=1`) — el usuario imprime desde el navegador.
+2. **PDF** generado con **DomPDF** por defecto (mismo motor que el archivo de referencia). Opcional: `REPORT_PDF_DRIVER=browsershot` si Node/Puppeteer están instalados.
 
-El funcionamiento real del módulo es el **PDF descargado** (botón en la app o API con token).
+### Variables de entorno (API)
+
+| Variable | Default | Uso |
+|----------|---------|-----|
+| `REPORT_PREVIEW_ENABLED` | `true` | HTML de vista previa en el portal |
+| `REPORT_PDF_DRIVER` | `browsershot` | `browsershot` o `dompdf` (respaldo) |
+| `BROWSERSHOT_NO_SANDBOX` | `true` | Linux/Docker: `--no-sandbox` |
+| `BROWSERSHOT_NODE_BINARY` | — | Ruta a `node` si no está en PATH |
+| `BROWSERSHOT_NPM_BINARY` | — | Ruta a `npm` |
+| `BROWSERSHOT_CHROME_PATH` | — | Ruta a Chrome/Chromium |
+
+### Requisitos Browsershot (servidor)
+
+```bash
+cd clinica-api
+npm install puppeteer
+```
+
+Node.js debe estar instalado. El logo de la clínica debe resolverse por URL pública (`APP_URL` + `storage/...`) para que Chromium lo cargue al generar el PDF.
 
 ## Diseño del documento
 

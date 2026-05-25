@@ -22,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
+        $this->app->singleton(\App\Core\reporting\BrowsershotPdfRenderer::class);
         $this->app->singleton(\App\Core\reporting\PdfReportRenderer::class);
 
         $this->app->singleton(\App\Core\reporting\ReportExportResponse::class, function ($app) {

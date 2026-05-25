@@ -1,5 +1,14 @@
 @extends('reports.layouts.pdf')
 
+@php
+    $hc = $report->numeroHistoriaClinica !== '—' ? $report->numeroHistoriaClinica : null;
+    $docTitle = $hc
+        ? 'HC '.$hc.' — Filiación'
+        : 'Hoja de filiación';
+@endphp
+
+@section('document-title', $docTitle)
+
 @section('report-title', $report->reportTitle())
 
 @section('report-subtitle')
@@ -82,7 +91,7 @@
         vertical-align: middle;
         text-align: center;
         padding: 0;
-        height: 110px;
+        height: 113px;
     }
     table.auth-print-pad {
         margin: 0 auto;
@@ -105,8 +114,8 @@
         text-align: center;
     }
     .auth-fingerprint-inner {
-        width: 68px;
-        height: 90px;
+        width: 77px;
+        height: 93px;
         margin: 0 auto 6px;
         border: 1px dashed #94a3b8;
         background: #f8fafc;
