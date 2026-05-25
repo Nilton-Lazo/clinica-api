@@ -2,6 +2,8 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaRecargoNoche;
@@ -40,13 +42,17 @@ class TarifaRecargoNocheController extends Controller
     {
         $this->authorize('viewAny', Tarifa::class);
 
-        $status = $request->query('status');
+        $params = GridParams::fromRequest(
+            $request,
+            ['codigo', 'categoria', 'porcentaje', 'hora_desde', 'hora_hasta', 'estado'],
+            'codigo',
+        );
 
-        $items = $this->service->listByTarifa($tarifa, $status);
-
-        return response()->json([
-            'data' => $items->map(fn ($r) => $this->present($r))->values()->all(),
-        ]);
+        return GridResponse::fromPaginator(
+            $this->service->paginate($tarifa, $params),
+            fn ($r) => $this->present($r),
+            ['active_categoria_ids' => $this->service->activeCategoriaIds($tarifa)],
+        );
     }
 
     public function store(Tarifa $tarifa, TarifaRecargoNocheStoreRequest $request)
