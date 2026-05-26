@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Servicios solicitados por atención de cita (copagos, descuentos, médico, usuario).
-     */
     public function up(): void
     {
         Schema::create('cita_atencion_servicios', function (Blueprint $table) {
