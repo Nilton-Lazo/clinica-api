@@ -24,6 +24,22 @@ class CajaMedioPagoStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.unique' => 'Ya existe un medio de pago con ese código.',
+            'codigo.max' => 'El código del medio de pago no debe superar 50 caracteres.',
+            'descripcion.required' => 'Ingresa la descripción del medio de pago.',
+            'descripcion.max' => 'La descripción del medio de pago no debe superar 255 caracteres.',
+            'estado.in' => 'Selecciona un estado válido para el medio de pago.',
+            'forma_pago_ids.required' => 'Selecciona al menos una forma de pago activa.',
+            'forma_pago_ids.array' => 'Selecciona una forma de pago válida.',
+            'forma_pago_ids.min' => 'Selecciona al menos una forma de pago activa.',
+            'forma_pago_ids.*.integer' => 'Selecciona una forma de pago válida.',
+            'forma_pago_ids.*.exists' => 'La forma de pago seleccionada no existe o está inactiva.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

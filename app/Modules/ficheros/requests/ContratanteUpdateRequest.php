@@ -28,6 +28,21 @@ class ContratanteUpdateRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.prohibited' => 'El código del contratante lo genera el sistema; no lo modifiques manualmente.',
+            'razon_social.required' => 'Ingresa la razón social del contratante.',
+            'razon_social.string' => 'La razón social del contratante debe ser texto.',
+            'razon_social.max' => 'La razón social del contratante no debe superar 255 caracteres.',
+            'ruc.regex' => 'El RUC del contratante debe tener 11 dígitos numéricos.',
+            'telefono.max' => 'El teléfono del contratante no debe superar 30 caracteres.',
+            'direccion.max' => 'La dirección del contratante no debe superar 255 caracteres.',
+            'estado.required' => 'Selecciona el estado del contratante.',
+            'estado.in' => 'El estado del contratante debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if ($this->has('razon_social')) {

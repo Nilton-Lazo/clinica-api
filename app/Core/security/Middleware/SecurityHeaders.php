@@ -12,8 +12,11 @@ class SecurityHeaders
     {
         $response = $next($request);
 
+        $contentType = (string) ($response->headers->get('Content-Type') ?? '');
+        $isPdf = str_contains($contentType, 'application/pdf');
+
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'DENY');
+        $response->headers->set('X-Frame-Options', $isPdf ? 'SAMEORIGIN' : 'DENY');
         $response->headers->set('Referrer-Policy', 'no-referrer');
         $response->headers->set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
 
@@ -24,7 +27,6 @@ class SecurityHeaders
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         }
 
-        $contentType = (string) ($response->headers->get('Content-Type') ?? '');
         $isHtml = str_contains($contentType, 'text/html');
 
         if ($isHtml) {

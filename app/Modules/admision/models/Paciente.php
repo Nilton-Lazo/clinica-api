@@ -6,6 +6,9 @@ use App\Core\audit\AuditableModel;
 use App\Core\support\RecordStatus;
 use App\Core\support\SexoPaciente;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Paciente extends AuditableModel
 {
@@ -56,27 +59,32 @@ class Paciente extends AuditableModel
         return $query->where('estado', RecordStatus::ACTIVO->value);
     }
 
-    public function paisNacionalidad()
+    public function paisNacionalidad(): BelongsTo
     {
         return $this->belongsTo(Pais::class, 'nacionalidad_iso2', 'iso2');
     }
 
-    public function ubigeoNacimiento()
+    public function ubigeoNacimiento(): BelongsTo
     {
         return $this->belongsTo(Ubigeo::class, 'ubigeo_nacimiento', 'codigo');
     }
 
-    public function ubigeoDomicilio()
+    public function ubigeoDomicilio(): BelongsTo
     {
         return $this->belongsTo(Ubigeo::class, 'ubigeo_domicilio', 'codigo');
     }
 
-    public function contactoEmergencia()
+    public function contactoEmergencia(): HasOne
     {
         return $this->hasOne(PacienteContactoEmergencia::class, 'paciente_id');
     }
 
-    public function planes()
+    public function medicoTratante(): BelongsTo
+    {
+        return $this->belongsTo(Medico::class, 'medico_tratante_id');
+    }
+
+    public function planes(): HasMany
     {
         return $this->hasMany(PacientePlan::class, 'paciente_id')->orderBy('id', 'asc');
     }

@@ -3,7 +3,10 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\TipoProfesionalClinica;
 use App\Modules\admision\models\Medico;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -12,15 +15,13 @@ use Illuminate\Support\Facades\DB;
 
 class MedicoService
 {
+    use AppliesListingQuery;
+
     public function __construct(private AuditService $audit) {}
 
     private function formatCodigo(int $n): string
     {
-        $codigo = str_pad((string)$n, 3, '0', STR_PAD_LEFT);
-        if (strlen($codigo) > 10) {
-            throw new \RuntimeException('No se pudo generar el código: excede 10 caracteres.');
-        }
-        return $codigo;
+        return CodigoCorrelativo::format($n);
     }
 
     private function nextCodigo(): string
@@ -57,52 +58,33 @@ class MedicoService
         Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:medicos:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:medicos:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = Medico::query()->with(['especialidad:id,codigo,descripcion']);
+            $this->applyListingStatus($query, $params);
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('dni', 'ilike', "%{$q}%")
-                        ->orWhere('cmp', 'ilike', "%{$q}%")
-                        ->orWhere('rne', 'ilike', "%{$q}%")
-                        ->orWhere('ruc', 'ilike', "%{$q}%")
-                        ->orWhere('nombres', 'ilike', "%{$q}%")
-                        ->orWhere('apellido_paterno', 'ilike', "%{$q}%")
-                        ->orWhere('apellido_materno', 'ilike', "%{$q}%")
-                        ->orWhere('email', 'ilike', "%{$q}%");
+            if ($params->q !== null) {
+                $term = $params->q;
+                $query->where(function ($sub) use ($term) {
+                    $sub->where('codigo', 'ilike', "%{$term}%")
+                        ->orWhere('dni', 'ilike', "%{$term}%")
+                        ->orWhere('cmp', 'ilike', "%{$term}%")
+                        ->orWhere('rne', 'ilike', "%{$term}%")
+                        ->orWhere('ruc', 'ilike', "%{$term}%")
+                        ->orWhere('nombres', 'ilike', "%{$term}%")
+                        ->orWhere('apellido_paterno', 'ilike', "%{$term}%")
+                        ->orWhere('apellido_materno', 'ilike', "%{$term}%")
+                        ->orWhere('email', 'ilike', "%{$term}%");
                 });
             }
 
-            return $query
-                ->orderBy('apellido_paterno')
-                ->orderBy('apellido_materno')
-                ->orderBy('nombres')
-                ->paginate($perPage, ['*'], 'page', $page)
-                ->appends([
-                    'per_page' => $perPage,
-                    'q' => $q,
-                    'status' => $status,
-                ]);
+            $this->applyListingSort($query, $params, ['codigo', 'apellido_paterno', 'apellido_materno', 'nombres', 'estado'], 'apellido_paterno');
+
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 

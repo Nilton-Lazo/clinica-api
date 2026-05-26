@@ -3,6 +3,9 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\ModalidadFechasProgramacion;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Medico;
@@ -17,19 +20,15 @@ use Illuminate\Validation\ValidationException;
 
 class ProgramacionMedicaService
 {
-    public function __construct(private AuditService $audit) {}
+    use AppliesListingQuery;
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+    ) {}
+
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-        $from = isset($filters['from']) ? trim((string)$filters['from']) : null;
-        $to = isset($filters['to']) ? trim((string)$filters['to']) : null;
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-
         $query = ProgramacionMedica::query()->with([
             'especialidad:id,codigo,descripcion',
             'medico:id,nombres,apellido_paterno,apellido_materno,tiempo_promedio_por_paciente',
@@ -37,33 +36,30 @@ class ProgramacionMedicaService
             'consultorio:id,abreviatura,descripcion',
         ]);
 
-        if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
-        }
+        $this->applyListingStatus($query, $params);
 
-        if ($from !== null && $from !== '') {
+        $from = $params->filter('from');
+        $to = $params->filter('to');
+        if (is_string($from) && $from !== '') {
             $query->whereDate('fecha', '>=', $from);
         }
-
-        if ($to !== null && $to !== '') {
+        if (is_string($to) && $to !== '') {
             $query->whereDate('fecha', '<=', $to);
         }
 
-        if ($q !== null && $q !== '') {
-            $this->applySearch($query, $q);
+        if ($params->q !== null && $params->q !== '') {
+            $this->applySearch($query, $params->q);
         }
 
-        return $query
-            ->orderBy('fecha', 'asc')
-            ->orderBy('turno_id')
-            ->paginate($perPage)
-            ->appends([
-                'per_page' => $perPage,
-                'status' => $status,
-                'from' => $from,
-                'to' => $to,
-                'q' => $q,
-            ]);
+        $this->applyListingSort(
+            $query,
+            $params,
+            ['codigo', 'fecha', 'cupos', 'estado'],
+            'fecha',
+            ['codigo' => 'codigo']
+        );
+
+        return $query->orderBy('turno_id')->paginate($params->perPage, ['*'], 'page', $params->page);
     }
 
     public function calcularCupos(int $medicoId, int $turnoId): array
@@ -75,17 +71,17 @@ class ProgramacionMedicaService
         $tpp = (int)($medico->tiempo_promedio_por_paciente ?? 0);
 
         if ($dur <= 0) {
-            throw ValidationException::withMessages(['turno_id' => ['El turno no tiene duración válida.']]);
+            throw ValidationException::withMessages(['turno_id' => ['El turno seleccionado no tiene una duración válida para calcular cupos.']]);
         }
 
         if ($tpp <= 0) {
-            throw ValidationException::withMessages(['medico_id' => ['El médico no tiene tiempo promedio por paciente válido.']]);
+            throw ValidationException::withMessages(['medico_id' => ['El médico seleccionado no tiene un tiempo promedio por paciente válido.']]);
         }
 
         $cupos = intdiv($dur, $tpp);
 
         if ($cupos < 1) {
-            throw ValidationException::withMessages(['cupos' => ['Con esos valores no se puede generar al menos 1 cupo.']]);
+            throw ValidationException::withMessages(['cupos' => ['Con la duración del turno y el tiempo promedio del médico no se puede generar al menos un cupo.']]);
         }
 
         return [
@@ -100,13 +96,13 @@ class ProgramacionMedicaService
         $fechas = $this->expandirFechas($data);
 
         if (count($fechas) > 370) {
-            throw ValidationException::withMessages(['fechas' => ['El rango/lista de fechas es demasiado grande.']]);
+            throw ValidationException::withMessages(['fechas' => ['La programación médica no puede generarse para más de 370 fechas a la vez.']]);
         }
 
         $medico = Medico::query()->findOrFail((int)$data['medico_id']);
 
         if ((int)$medico->especialidad_id !== (int)$data['especialidad_id']) {
-            throw ValidationException::withMessages(['medico_id' => ['El médico no corresponde a la especialidad seleccionada.']]);
+            throw ValidationException::withMessages(['medico_id' => ['El médico seleccionado no corresponde a la especialidad elegida.']]);
         }
 
         $cuposInfo = $this->calcularCupos((int)$data['medico_id'], (int)$data['turno_id']);
@@ -164,6 +160,14 @@ class ProgramacionMedicaService
             );
 
             $ids = array_map(fn($x) => $x->id, $created);
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'programacion_medica',
+                action: 'created',
+                id: count($ids) === 1 ? (int) $ids[0] : 'batch',
+                scope: (string) ($fechas[0] ?? ''),
+                metadata: ['ids' => $ids, 'cantidad' => count($created), 'fechas' => $fechas],
+            );
 
             $full = ProgramacionMedica::query()
                 ->whereIn('id', $ids)
@@ -187,7 +191,7 @@ class ProgramacionMedicaService
         $medico = Medico::query()->findOrFail((int)$data['medico_id']);
 
         if ((int)$medico->especialidad_id !== (int)$data['especialidad_id']) {
-            throw ValidationException::withMessages(['medico_id' => ['El médico no corresponde a la especialidad seleccionada.']]);
+            throw ValidationException::withMessages(['medico_id' => ['El médico seleccionado no corresponde a la especialidad elegida.']]);
         }
 
         $cuposInfo = $this->calcularCupos((int)$data['medico_id'], (int)$data['turno_id']);
@@ -255,6 +259,15 @@ class ProgramacionMedicaService
                 200
             );
 
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'programacion_medica',
+                action: 'updated',
+                id: (int) $pm->id,
+                scope: (string) $pm->fecha,
+                metadata: ['before' => $before, 'after' => $after],
+            );
+
             return $pm->load([
                 'especialidad:id,codigo,descripcion',
                 'medico:id,nombres,apellido_paterno,apellido_materno,tiempo_promedio_por_paciente',
@@ -283,6 +296,15 @@ class ProgramacionMedicaService
                 ],
                 'success',
                 200
+            );
+
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'programacion_medica',
+                action: 'disabled',
+                id: (int) $pm->id,
+                scope: (string) $pm->fecha,
+                metadata: ['estado' => $pm->estado],
             );
 
             return $pm->load([
@@ -324,7 +346,7 @@ class ProgramacionMedicaService
             return $out;
         }
 
-        throw ValidationException::withMessages(['modalidad_fechas' => ['Modalidad inválida.']]);
+        throw ValidationException::withMessages(['modalidad_fechas' => ['La modalidad de fechas seleccionada no es válida para programación médica.']]);
     }
 
     private function applySearch(Builder $query, string $q): void

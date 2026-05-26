@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\services;
 
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaRecargoNoche;
@@ -90,13 +91,13 @@ class TarifarioCatalogoService
 
         if (!$base) {
             throw ValidationException::withMessages([
-                'tarifa_base' => ['No existe un tarifario base configurado.'],
+                'tarifa_base' => ['No existe un tarifario base configurado. Marca una tarifa activa como base antes de clonar o consultar el árbol base.'],
             ]);
         }
 
         if ($base->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_base' => ['El tarifario base debe estar ACTIVO.'],
+                'tarifa_base' => ['El tarifario base debe estar activo para consultar servicios o clonar datos.'],
             ]);
         }
 
@@ -107,13 +108,13 @@ class TarifarioCatalogoService
     {
         if ($tarifa->tarifa_base) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['El tarifario base no puede usarse en esta pantalla (solo para clonación).'],
+                'tarifa_id' => ['El tarifario base no puede usarse como tarifa operativa en esta pantalla; úsalo solo como origen de clonación.'],
             ]);
         }
 
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa debe estar ACTIVA.'],
+                'tarifa_id' => ['La tarifa seleccionada debe estar activa para gestionar servicios.'],
             ]);
         }
     }
@@ -180,7 +181,7 @@ class TarifarioCatalogoService
     {
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa debe estar ACTIVA.'],
+                'tarifa_id' => ['La tarifa seleccionada debe estar activa para consultar sus servicios.'],
             ]);
         }
 
@@ -350,16 +351,15 @@ class TarifarioCatalogoService
     {
         $base = $this->getTarifaBase();
 
-        $cats = DB::table('tarifa_categorias')
-            ->where('tarifa_id', (int)$base->id)
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
+        $cats = CodigoCorrelativo::orderByCodigoAsc(
+            DB::table('tarifa_categorias')->where('tarifa_id', (int) $base->id)
+        )->get(['id', 'codigo', 'nombre']);
 
-        $subs = DB::table('tarifa_subcategorias')
-            ->where('tarifa_id', (int)$base->id)
-            ->orderBy('categoria_id')
-            ->orderBy('codigo')
-            ->get(['id', 'categoria_id', 'codigo', 'nombre']);
+        $subs = CodigoCorrelativo::orderByCodigoAsc(
+            DB::table('tarifa_subcategorias')
+                ->where('tarifa_id', (int) $base->id)
+                ->orderBy('categoria_id')
+        )->get(['id', 'categoria_id', 'codigo', 'nombre']);
 
         $servs = DB::table('tarifa_servicios')
             ->where('tarifa_id', (int)$base->id)

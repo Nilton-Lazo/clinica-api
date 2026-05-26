@@ -3,6 +3,9 @@
 namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\GridParams;
+use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\PacientePlan;
 use App\Modules\admision\models\Presupuesto;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -13,30 +16,20 @@ use Illuminate\Validation\ValidationException;
 
 class PresupuestoService
 {
-    private const CODIGO_MIN_DIGITS = 10;
-
-    /** Caché de vista previa del siguiente código (se invalida al crear un presupuesto). */
     private const NEXT_CODIGO_CACHE_KEY = 'admision:presupuestos:next_codigo_preview';
 
     private const NEXT_CODIGO_CACHE_TTL_SECONDS = 3600;
 
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+    ) {}
 
-    /**
-     * Código legible alineado al id: mínimo 10 dígitos con ceros a la izquierda; si el id supera ese ancho, no se trunca.
-     */
     public function formatCodigoFromId(int $id): string
     {
-        $s = (string) $id;
-        $len = max(self::CODIGO_MIN_DIGITS, strlen($s));
-
-        return str_pad($s, $len, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($id, 'documento_largo');
     }
 
-    /**
-     * Vista previa del siguiente código. Usa caché (invalidada al guardar) para responder rápido;
-     * el código definitivo sigue siendo único (derivado del id autoincremental tras el INSERT).
-     */
     public function previewNextCodigo(): string
     {
         return Cache::remember(
@@ -50,20 +43,10 @@ class PresupuestoService
         );
     }
 
-    /**
-     * PostgreSQL / PDO requieren JSON como cadena en el INSERT. Se codifica aquí de forma explícita.
-     *
-     * @param  array<string, mixed>  $payload
-     */
-    /**
-     * Listado paginado con datos del paciente (HC / nombre alineados a la lógica del modelo Paciente).
-     *
-     * @param  array<string, mixed>  $filters  validated index request
-     */
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = min(100, max(1, (int) ($filters['per_page'] ?? 50)));
-        $page = max(1, (int) ($filters['page'] ?? 1));
+        $perPage = $params->perPage;
+        $page = $params->page;
 
         $driver = DB::connection()->getDriverName();
         $hcExpr = match ($driver) {
@@ -88,7 +71,7 @@ class PresupuestoService
             ->selectRaw("{$hcExpr} as hc")
             ->selectRaw("{$nombreExpr} as nombre_completo");
 
-        $q = trim((string) ($filters['q'] ?? ''));
+        $q = trim((string) ($params->q ?? ''));
         if ($q !== '') {
             $escaped = addcslashes($q, '%_\\');
             $term = '%'.$escaped.'%';
@@ -106,19 +89,39 @@ class PresupuestoService
             });
         }
 
-        if (! empty($filters['vigencia_desde'])) {
-            $query->whereDate('admision_presupuestos.vigencia_hasta', '>=', $filters['vigencia_desde']);
+        $vigenciaDesde = $params->filter('vigencia_desde');
+        $vigenciaHasta = $params->filter('vigencia_hasta');
+        $estado = $params->filter('estado');
+        if (is_string($vigenciaDesde) && $vigenciaDesde !== '') {
+            $query->whereDate('admision_presupuestos.vigencia_hasta', '>=', $vigenciaDesde);
         }
-        if (! empty($filters['vigencia_hasta'])) {
-            $query->whereDate('admision_presupuestos.vigencia_hasta', '<=', $filters['vigencia_hasta']);
+        if (is_string($vigenciaHasta) && $vigenciaHasta !== '') {
+            $query->whereDate('admision_presupuestos.vigencia_hasta', '<=', $vigenciaHasta);
         }
-        if (! empty($filters['estado']) && is_string($filters['estado'])) {
-            $query->where('admision_presupuestos.estado', $filters['estado']);
+        if (is_string($estado) && $estado !== '') {
+            $query->where('admision_presupuestos.estado', $estado);
         }
 
-        $query->orderByDesc('admision_presupuestos.created_at');
+        $sort = $params->sort ?? 'created_at';
+        $allowed = ['codigo', 'hc', 'nombre_completo', 'vigencia_hasta', 'estado', 'created_at'];
+        if (! in_array($sort, $allowed, true)) {
+            $sort = 'created_at';
+        }
+        $dir = $params->sortDir === 'desc' ? 'desc' : 'asc';
+        if ($sort === 'hc') {
+            $query->orderBy('hc', $dir);
+        } elseif ($sort === 'nombre_completo') {
+            $query->orderBy('nombre_completo', $dir);
+        } elseif ($sort === 'codigo') {
+            $query->orderBy('admision_presupuestos.codigo', $dir);
+        } elseif ($sort === 'vigencia_hasta') {
+            $query->orderBy('admision_presupuestos.vigencia_hasta', $dir);
+        } elseif ($sort === 'estado') {
+            $query->orderBy('admision_presupuestos.estado', $dir);
+        } else {
+            $query->orderBy('admision_presupuestos.created_at', $dir);
+        }
 
-        /** @var LengthAwarePaginator $paginator */
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
         $paginator->getCollection()->transform(function ($row) {
@@ -157,10 +160,6 @@ class PresupuestoService
         }
     }
 
-    /**
-     * @param  array<string, mixed>  $data  validated request data
-     * @return array{presupuesto: Presupuesto}
-     */
     public function store(array $data, ?int $userId): array
     {
         $pacienteId = (int) $data['paciente_id'];
@@ -173,7 +172,7 @@ class PresupuestoService
 
         if (!$plan) {
             throw ValidationException::withMessages([
-                'paciente_plan_id' => ['El plan no pertenece al paciente indicado.'],
+                'paciente_plan_id' => ['El plan seleccionado no pertenece al paciente del presupuesto.'],
             ]);
         }
 
@@ -214,6 +213,19 @@ class PresupuestoService
         });
 
         Cache::forget(self::NEXT_CODIGO_CACHE_KEY);
+        $presupuesto = $result['presupuesto'];
+        $this->realtime->entityChanged(
+            module: 'admision',
+            entity: 'presupuesto',
+            action: 'created',
+            id: (int) $presupuesto->id,
+            scope: (string) $presupuesto->codigo,
+            metadata: [
+                'codigo' => $presupuesto->codigo,
+                'paciente_id' => (int) $presupuesto->paciente_id,
+                'estado' => $presupuesto->estado,
+            ],
+        );
 
         return $result;
     }

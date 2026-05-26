@@ -2,19 +2,22 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
 use App\Http\Controllers\Controller;
+use App\Modules\admision\models\ParametroSistema;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaServicio;
 use App\Modules\ficheros\requests\TarifaServicioStoreRequest;
 use App\Modules\ficheros\requests\TarifaServicioUpdateRequest;
 use App\Modules\ficheros\services\TarifaServicioService;
+use App\Modules\ficheros\support\TarifaServicioPrecioIgv;
 use Illuminate\Http\Request;
 
 class TarifaServicioController extends Controller
 {
     public function __construct(private TarifaServicioService $service) {}
 
-    private function present(TarifaServicio $s): array
+    private function present(TarifaServicio $s, float $igvPorcentaje): array
     {
         return [
             'id' => (int)$s->id,
@@ -26,6 +29,7 @@ class TarifaServicioController extends Controller
             'nomenclador' => $s->nomenclador,
             'descripcion' => (string)$s->descripcion,
             'precio_sin_igv' => $s->precio_sin_igv,
+            'precio_con_igv' => TarifaServicioPrecioIgv::precioConIgvDesdeSin($s->precio_sin_igv, $igvPorcentaje),
             'unidad' => $s->unidad,
             'grupo_codigo' => $s->grupo_codigo,
             'grupo_descripcion' => $s->grupo_descripcion,
@@ -41,17 +45,24 @@ class TarifaServicioController extends Controller
     {
         $this->authorize('viewAny', [TarifaServicio::class, $tarifa]);
 
-        $p = $this->service->paginate($tarifa, $request->only([
-            'q', 'status', 'categoria_id', 'subcategoria_id', 'grupo_codigo', 'per_page', 'page'
-        ]));
+        $params = GridParams::fromRequest(
+            $request,
+            ['codigo', 'descripcion', 'estado', 'precio_sin_igv', 'precio_con_igv', 'unidad'],
+            'codigo'
+        );
+
+        $p = $this->service->paginate($tarifa, $params);
+
+        $igv = ParametroSistema::getIgvPorcentaje();
 
         return response()->json([
-            'data' => array_map(fn ($x) => $this->present($x), $p->items()),
+            'data' => array_map(fn ($x) => $this->present($x, $igv), $p->items()),
             'meta' => [
                 'current_page' => $p->currentPage(),
                 'per_page' => $p->perPage(),
                 'total' => $p->total(),
                 'last_page' => $p->lastPage(),
+                'igv_porcentaje' => $igv,
             ],
         ]);
     }
@@ -74,7 +85,8 @@ class TarifaServicioController extends Controller
 
         $created = $this->service->create($tarifa, $request->validated());
 
-        $payload = ['data' => $this->present($created)];
+        $igv = ParametroSistema::getIgvPorcentaje();
+        $payload = ['data' => $this->present($created, $igv)];
         if ($this->service->lastPropagationResult !== null) {
             $payload['propagacion'] = $this->service->lastPropagationResult->toArray();
         }
@@ -88,7 +100,9 @@ class TarifaServicioController extends Controller
 
         $updated = $this->service->update($tarifa, $servicio, $request->validated());
 
-        return response()->json(['data' => $this->present($updated)]);
+        $igv = ParametroSistema::getIgvPorcentaje();
+
+        return response()->json(['data' => $this->present($updated, $igv)]);
     }
 
     public function deactivate(Tarifa $tarifa, TarifaServicio $servicio)
@@ -97,7 +111,9 @@ class TarifaServicioController extends Controller
 
         $updated = $this->service->deactivate($tarifa, $servicio);
 
-        return response()->json(['data' => $this->present($updated)]);
+        $igv = ParametroSistema::getIgvPorcentaje();
+
+        return response()->json(['data' => $this->present($updated, $igv)]);
     }
 }
 

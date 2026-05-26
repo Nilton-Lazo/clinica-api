@@ -22,4 +22,17 @@ class CajaFormaPagoUpdateRequest extends FormRequest
             'estado' => ['required', 'string', Rule::in(RecordStatus::values())],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'codigo.required' => 'Ingresa el código de la forma de pago.',
+            'codigo.unique' => 'Ya existe una forma de pago con ese código.',
+            'codigo.max' => 'El código de la forma de pago no debe superar 50 caracteres.',
+            'descripcion.required' => 'Ingresa la descripción de la forma de pago.',
+            'descripcion.max' => 'La descripción de la forma de pago no debe superar 255 caracteres.',
+            'estado.required' => 'Selecciona el estado de la forma de pago.',
+            'estado.in' => 'Selecciona un estado válido para la forma de pago.',
+        ];
+    }
 }

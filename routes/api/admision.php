@@ -3,12 +3,14 @@
 use App\Modules\admision\controllers\citas\ProgramacionMedicaController;
 use App\Modules\admision\controllers\citas\AgendaMedicaController;
 use App\Modules\admision\controllers\citas\CitaAtencionController;
+use App\Modules\admision\controllers\citas\CitaAtencionReportController;
 use App\Modules\admision\controllers\citas\CuentaBitacoraNotaController;
 use App\Modules\admision\controllers\citas\CuentaCitaController;
 use App\Modules\admision\controllers\citas\PreFacturacionHospitalariaController;
 use App\Modules\admision\controllers\citas\PresupuestoController;
 use App\Modules\admision\controllers\catalogos\CatalogoPacienteController;
 use App\Modules\admision\controllers\pacientes\PacienteController;
+use App\Modules\admision\controllers\pacientes\PacienteReportController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -37,6 +39,7 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::get('presupuestos', [PresupuestoController::class, 'index'])->middleware('throttle:api');
         Route::post('presupuestos', [PresupuestoController::class, 'store'])->middleware('throttle:sensitive-write');
         Route::patch('agenda-medica/{id}/anular', [AgendaMedicaController::class, 'anular'])->middleware('throttle:sensitive-write');
+        Route::get('agenda-medica/{cita}/atencion/reporte', [CitaAtencionReportController::class, 'reporteAtencion'])->middleware('throttle:api');
         Route::get('agenda-medica/{id}/atencion', [CitaAtencionController::class, 'show'])->middleware('throttle:agenda-api');
         Route::post('agenda-medica/{id}/atencion', [CitaAtencionController::class, 'store'])->middleware('throttle:sensitive-write');
     });
@@ -52,6 +55,8 @@ Route::prefix('admision')->middleware(['auth:sanctum', 'token.fresh', 'audit'])-
         Route::get('', [PacienteController::class, 'index'])->middleware('throttle:api');
         Route::get('{paciente}/bitacora-notas', [CuentaBitacoraNotaController::class, 'indexByPaciente'])->middleware('throttle:api');
         Route::post('{paciente}/bitacora-notas', [CuentaBitacoraNotaController::class, 'storeByPaciente'])->middleware('throttle:sensitive-write');
+        Route::get('{paciente}/reporte-filiacion', [PacienteReportController::class, 'hojaFiliacion'])->middleware('throttle:api');
+        Route::get('{paciente}/planes', [PacienteController::class, 'plans'])->middleware('throttle:api');
         Route::get('{paciente}', [PacienteController::class, 'show'])->middleware('throttle:api');
     
         Route::post('', [PacienteController::class, 'store'])->middleware('throttle:sensitive-write');

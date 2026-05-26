@@ -36,6 +36,23 @@ class TipoClienteUpdateRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.prohibited' => 'El código del tipo de cliente lo genera el sistema; no lo modifiques manualmente.',
+            'iafa_id.prohibited' => 'La IAFAS del tipo de cliente se obtiene desde la tarifa seleccionada; no la modifiques manualmente.',
+            'descripcion_tipo_cliente.prohibited' => 'La descripción del tipo de cliente se genera con el contratante y la tarifa; no la modifiques manualmente.',
+            'tarifa_id.required' => 'Selecciona la tarifa del tipo de cliente.',
+            'tarifa_id.integer' => 'Selecciona una tarifa válida para el tipo de cliente.',
+            'tarifa_id.exists' => 'La tarifa seleccionada no existe, está inactiva o no tiene IAFAS asociada.',
+            'contratante_id.required' => 'Selecciona el contratante del tipo de cliente.',
+            'contratante_id.integer' => 'Selecciona un contratante válido para el tipo de cliente.',
+            'contratante_id.exists' => 'El contratante seleccionado no existe o está inactivo.',
+            'estado.required' => 'Selecciona el estado del tipo de cliente.',
+            'estado.in' => 'El estado del tipo de cliente debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if ($this->has('tarifa_id')) {

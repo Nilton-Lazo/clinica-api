@@ -20,5 +20,16 @@ class EspecialidadUpdateRequest extends FormRequest
             'estado' => ['required', 'string', Rule::in(RecordStatus::values())],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'descripcion.required' => 'Ingresa la descripción de la especialidad.',
+            'descripcion.string' => 'La descripción de la especialidad debe ser texto.',
+            'descripcion.max' => 'La descripción de la especialidad no debe superar 255 caracteres.',
+            'estado.required' => 'Selecciona el estado de la especialidad.',
+            'estado.in' => 'El estado de la especialidad debe ser ACTIVO o INACTIVO.',
+        ];
+    }
 }
 

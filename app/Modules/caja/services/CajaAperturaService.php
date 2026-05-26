@@ -3,6 +3,7 @@
 namespace App\Modules\caja\services;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Models\User;
 use App\Modules\admision\models\AreaJefatura;
 use App\Modules\caja\models\CajaApertura;
@@ -18,6 +19,7 @@ class CajaAperturaService
 
     public function __construct(
         private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     private function allocateNextCodigoSerial(): string
@@ -37,7 +39,9 @@ class CajaAperturaService
         }
 
         if ($next > self::CODIGO_MAX) {
-            throw new \RuntimeException('No hay códigos de apertura disponibles.');
+            throw ValidationException::withMessages([
+                'codigo' => ['No hay códigos de apertura disponibles para crear una nueva caja.'],
+            ]);
         }
 
         return str_pad((string) $next, 10, '0', STR_PAD_LEFT);
@@ -64,19 +68,32 @@ class CajaAperturaService
 
             if ($alreadyOpened) {
                 throw ValidationException::withMessages([
-                    'tipo' => 'Ya tienes una caja '.strtolower($tipo).' aperturada. Debes cerrarla antes de abrir otra.',
+                    'tipo' => ['Ya tienes una caja '.strtolower($tipo).' aperturada. Debes cerrarla antes de abrir otra.'],
                 ]);
             }
 
             $codigo = $this->allocateNextCodigoSerial();
 
-            User::query()->whereKey($data['user_entrega_id'])->where('estado', 'activo')->firstOrFail();
+            $entregaExists = User::query()
+                ->whereKey($data['user_entrega_id'])
+                ->where('estado', 'activo')
+                ->exists();
+            if (! $entregaExists) {
+                throw ValidationException::withMessages([
+                    'user_entrega_id' => ['El personal que entrega no existe o no está activo. Selecciona otro usuario.'],
+                ]);
+            }
             $recepciona = $actor;
 
-            AreaJefatura::query()
+            $areaExists = AreaJefatura::query()
                 ->whereKey($data['area_jefatura_id'])
                 ->where('estado', 'ACTIVO')
-                ->firstOrFail();
+                ->exists();
+            if (! $areaExists) {
+                throw ValidationException::withMessages([
+                    'area_jefatura_id' => ['El área o jefatura seleccionada no existe o no está activa. Selecciona otra opción.'],
+                ]);
+            }
 
             $row = CajaApertura::create([
                 'codigo' => $codigo,
@@ -106,6 +123,16 @@ class CajaAperturaService
                 201
             );
 
+            $this->realtime->entityChanged(
+                module: 'caja',
+                entity: 'caja_apertura',
+                action: 'created',
+                id: (int) $row->id,
+                scope: strtolower((string) $row->tipo),
+                metadata: ['codigo' => $row->codigo, 'tipo' => $row->tipo],
+                actorId: (int) $actor->id,
+            );
+
             return $row->load(['userEntrega', 'userRecepciona', 'areaJefatura']);
         });
     }
@@ -126,12 +153,20 @@ class CajaAperturaService
 
             if (!$open) {
                 throw ValidationException::withMessages([
-                    'tipo' => 'No tienes una caja '.strtolower($tipo).' aperturada para cerrar.',
+                    'tipo' => ['No tienes una caja '.strtolower($tipo).' aperturada para cerrar.'],
                 ]);
             }
 
+            $montoCierre = array_key_exists('monto_cierre', $data)
+                ? (float) $data['monto_cierre']
+                : (float) $open->monto_inicio;
+            $ajusteCierre = array_key_exists('ajuste_cierre', $data)
+                ? (float) $data['ajuste_cierre']
+                : null;
+
             $open->fill([
-                'monto_cierre' => $open->monto_inicio,
+                'monto_cierre' => $montoCierre,
+                'ajuste_cierre' => $ajusteCierre,
                 'observaciones_cierre' => $data['observaciones_cierre'] ?? null,
                 'cerrada_at' => Carbon::now($tz),
             ]);
@@ -151,6 +186,16 @@ class CajaAperturaService
                 200
             );
 
+            $this->realtime->entityChanged(
+                module: 'caja',
+                entity: 'caja_apertura',
+                action: 'closed',
+                id: (int) $open->id,
+                scope: strtolower((string) $open->tipo),
+                metadata: ['codigo' => $open->codigo, 'tipo' => $open->tipo],
+                actorId: (int) $actor->id,
+            );
+
             return $open->load(['userEntrega', 'userRecepciona', 'areaJefatura']);
         });
     }
@@ -159,6 +204,16 @@ class CajaAperturaService
     {
         $tz = (string) config('app.timezone');
         $ultimo = CajaApertura::query()->orderByDesc('apertura_at')->first();
+        $ultimoCierreNormal = CajaApertura::query()
+            ->where('tipo', CajaApertura::TIPO_NORMAL)
+            ->whereNotNull('cerrada_at')
+            ->orderByDesc('cerrada_at')
+            ->first();
+        $ultimoCierreChica = CajaApertura::query()
+            ->where('tipo', CajaApertura::TIPO_CHICA)
+            ->whereNotNull('cerrada_at')
+            ->orderByDesc('cerrada_at')
+            ->first();
         $tipos = CajaApertura::query()
             ->where('user_recepciona_id', $actor->id)
             ->whereNull('cerrada_at')
@@ -181,6 +236,10 @@ class CajaAperturaService
         return [
             'ultimo_cierre_monto' => null,
             'ultimo_cierre_moneda' => 'PEN',
+            'ultimo_cierre_normal_monto' => $ultimoCierreNormal ? (string) $ultimoCierreNormal->monto_cierre : null,
+            'ultimo_cierre_normal_moneda' => $ultimoCierreNormal?->moneda ?? 'PEN',
+            'ultimo_cierre_chica_monto' => $ultimoCierreChica ? (string) $ultimoCierreChica->monto_cierre : null,
+            'ultimo_cierre_chica_moneda' => $ultimoCierreChica?->moneda ?? 'PEN',
             'fondo_emergencia_monto' => null,
             'fondo_emergencia_moneda' => 'PEN',
             'operadores_activos_text' => $estadoTexto,

@@ -4,11 +4,15 @@ namespace App\Modules\emergencia\services;
 
 use App\Core\audit\AuditService;
 use App\Core\NroCuentaService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\EstadoFacturacionServicio;
+use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\RegistroEmergenciaServicio;
 use App\Modules\admision\models\RegistroEmergencia;
 use App\Modules\admision\models\Paciente;
+use App\Core\support\RecordStatus;
 use App\Modules\admision\services\citas\CuentaSyncService;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -18,6 +22,7 @@ class AtencionEmergenciaService
         private AuditService $audit,
         private NroCuentaService $nroCuentaService,
         private CuentaSyncService $cuentaSyncService,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     public function datosParaAtencion(int $registroId): array
@@ -29,6 +34,8 @@ class AtencionEmergenciaService
                 'servicios.user'
             ])
             ->findOrFail($registroId);
+        $cuenta = $this->findCuenta($registro);
+        $cuentaBloqueada = $this->isCuentaBloqueada($cuenta, $registro->numero_cuenta);
 
         $paciente = Paciente::query()
             ->where('numero_documento', $registro->numero_hc)
@@ -108,6 +115,13 @@ class AtencionEmergenciaService
                 'monto_a_pagar' => (float)$registro->monto_a_pagar,
             ],
             'paciente' => $paciente ? $paciente->toArray() : null,
+            'cuenta' => $cuenta ? [
+                'id' => (int) $cuenta->id,
+                'nro_cuenta' => (string) $cuenta->nro_cuenta,
+                'estado' => $cuenta->estado !== null ? (string) $cuenta->estado : null,
+                'bloqueada' => $cuentaBloqueada,
+            ] : null,
+            'bloqueada_facturacion' => $cuentaBloqueada,
             'servicios' => $serviciosPayload,
         ];
     }
@@ -115,6 +129,7 @@ class AtencionEmergenciaService
     public function guardarAtencion(int $registroId, array $data): array
     {
         $registro = RegistroEmergencia::query()->findOrFail($registroId);
+        $this->assertCuentaEditable($registro);
 
         $paciente = Paciente::query()
             ->where('numero_documento', $registro->numero_hc)
@@ -130,6 +145,24 @@ class AtencionEmergenciaService
         $serviciosInput = $data['servicios'] ?? null;
         $montoAPagar = isset($data['monto_a_pagar']) ? (float)$data['monto_a_pagar'] : null;
 
+        if (!$paciente) {
+            throw ValidationException::withMessages([
+                'numero_hc' => ['No se encontró el paciente del registro de emergencia. Regresa al registro y selecciona nuevamente al paciente.'],
+            ]);
+        }
+
+        if (!$pacientePlanId) {
+            throw ValidationException::withMessages([
+                'paciente_plan_id' => ['Selecciona el tipo de cliente del paciente antes de guardar la atención de emergencia.'],
+            ]);
+        }
+
+        if (!is_array($serviciosInput) || count($serviciosInput) === 0) {
+            throw ValidationException::withMessages([
+                'servicios' => ['Agrega al menos un servicio final antes de guardar la atención de emergencia.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($registro, $paciente, $acudio, $horaAsistenciaRequest, $pacientePlanId, $parentescoSeguro, $titularNombre, $serviciosInput, $montoAPagar) {
             $nroCuenta = $registro->numero_cuenta;
             if ($nroCuenta === null || $nroCuenta === '') {
@@ -137,11 +170,23 @@ class AtencionEmergenciaService
             }
 
             $tarifaId = null;
-            if ($pacientePlanId && $paciente) {
-                $plan = $paciente->planes()->with('tipoCliente:id,iafa_id,tarifa_id')->where('id', $pacientePlanId)->first();
-                if ($plan && $plan->tipoCliente) {
-                    $tarifaId = (int)$plan->tipoCliente->tarifa_id;
-                }
+            $plan = $paciente->planes()
+                ->with('tipoCliente:id,iafa_id,tarifa_id')
+                ->where('id', $pacientePlanId)
+                ->where('estado', RecordStatus::ACTIVO->value)
+                ->first();
+
+            if (!$plan || !$plan->tipoCliente) {
+                throw ValidationException::withMessages([
+                    'paciente_plan_id' => ['El tipo de cliente seleccionado no pertenece al paciente o ya no está activo. Selecciona un plan vigente.'],
+                ]);
+            }
+
+            $tarifaId = (int)$plan->tipoCliente->tarifa_id;
+            if ($tarifaId <= 0) {
+                throw ValidationException::withMessages([
+                    'paciente_plan_id' => ['El tipo de cliente seleccionado no tiene una tarifa configurada para registrar la atención de emergencia.'],
+                ]);
             }
 
             $horaAsistencia = null;
@@ -187,6 +232,24 @@ class AtencionEmergenciaService
                 ['nro_cuenta' => $nroCuenta],
                 'success',
                 200
+            );
+
+            $this->realtime->entityChanged(
+                module: 'emergencia',
+                entity: 'atencion_emergencia',
+                action: 'updated',
+                id: (int) $registro->id,
+                scope: (string) $nroCuenta,
+                metadata: ['nro_cuenta' => $nroCuenta, 'estado' => $registro->estado],
+            );
+
+            $this->realtime->entityChanged(
+                module: 'emergencia',
+                entity: 'registro_emergencia',
+                action: 'updated',
+                id: (int) $registro->id,
+                scope: (string) $nroCuenta,
+                metadata: ['nro_cuenta' => $nroCuenta, 'estado' => $registro->estado],
             );
 
             return [
@@ -246,5 +309,38 @@ class AtencionEmergenciaService
                 'estado_facturacion' => $estadoFacturacion,
             ]);
         }
+    }
+
+    private function findCuenta(RegistroEmergencia $registro): ?Cuenta
+    {
+        return Cuenta::query()
+            ->where('origen', 'REGISTRO_EMERGENCIA')
+            ->where('origen_id', (int) $registro->id)
+            ->first();
+    }
+
+    private function isCuentaBloqueada(?Cuenta $cuenta, ?string $nroCuenta): bool
+    {
+        if ($cuenta && strtoupper(trim((string) ($cuenta->estado ?? ''))) === 'CANCELADO') {
+            return true;
+        }
+
+        $nro = trim((string) ($cuenta?->nro_cuenta ?? $nroCuenta ?? ''));
+        if ($nro === '') {
+            return false;
+        }
+
+        return EmisionComprobanteFacturacion::existeFacturadoraParaCuenta($nro);
+    }
+
+    private function assertCuentaEditable(RegistroEmergencia $registro): void
+    {
+        if (! $this->isCuentaBloqueada($this->findCuenta($registro), $registro->numero_cuenta)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'cuenta' => ['La cuenta está cancelada y facturada. No se permiten modificaciones en la atención de emergencia.'],
+        ]);
     }
 }

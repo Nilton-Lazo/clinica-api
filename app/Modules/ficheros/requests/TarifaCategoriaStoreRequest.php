@@ -18,6 +18,16 @@ class TarifaCategoriaStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'descripcion.required' => 'Ingresa la descripción de la categoría.',
+            'descripcion.string' => 'La descripción de la categoría debe ser texto.',
+            'descripcion.max' => 'La descripción de la categoría no debe superar 255 caracteres.',
+            'estado.in' => 'El estado de la categoría debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

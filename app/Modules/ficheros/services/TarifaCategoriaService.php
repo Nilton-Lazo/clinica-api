@@ -3,7 +3,10 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -13,6 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaCategoriaService
 {
+    use AppliesListingQuery;
+
     public ?PropagacionResultado $lastPropagationResult = null;
 
     public function __construct(private AuditService $audit) {}
@@ -21,7 +26,7 @@ class TarifaCategoriaService
     {
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa debe estar ACTIVA para operar categorías.'],
+                'tarifa_id' => ['La tarifa seleccionada debe estar activa para gestionar categorías.'],
             ]);
         }
     }
@@ -30,17 +35,14 @@ class TarifaCategoriaService
     {
         if ((int)$categoria->tarifa_id !== (int)$tarifa->id) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La categoría no pertenece a la tarifa indicada.'],
+                'tarifa_id' => ['La categoría seleccionada no pertenece a la tarifa indicada. Actualiza la pantalla e intenta otra vez.'],
             ]);
         }
     }
 
     private function formatCodigo(int $n): string
     {
-        if ($n < 1 || $n > 99) {
-            throw new \RuntimeException('No se pudo generar el código de categoría: excede 2 dígitos (01-99).');
-        }
-        return str_pad((string)$n, 2, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($n);
     }
 
     public function peekNextCodigo(Tarifa $tarifa): string
@@ -56,40 +58,36 @@ class TarifaCategoriaService
     }
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
+    private const INDEX_CACHE_VERSION_PREFIX = 'tarifario:cat:index:version:';
 
-    public function paginate(Tarifa $tarifa, array $filters): LengthAwarePaginator
+    public static function invalidateIndexCacheForTarifa(int $tarifaId): void
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
+        $key = self::INDEX_CACHE_VERSION_PREFIX . $tarifaId;
+        Cache::put($key, (int) Cache::get($key, 0) + 1, 86400);
+    }
 
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
+    public static function clearLookupCacheForTarifa(int $tarifaId): void
+    {
+        Cache::forget(sprintf('tarifario:cat:lookup:%s:1', $tarifaId));
+        Cache::forget(sprintf('tarifario:cat:lookup:%s:0', $tarifaId));
+    }
 
-        $cacheKey = sprintf('tarifario:cat:index:%s:%s:%s:%s:%s', $tarifa->id, $page, $perPage, $q ?? '', $status ?? '');
+    private function indexCacheVersion(Tarifa $tarifa): int
+    {
+        return (int) Cache::get(self::INDEX_CACHE_VERSION_PREFIX . $tarifa->id, 0);
+    }
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
+    public function paginate(Tarifa $tarifa, GridParams $params): LengthAwarePaginator
+    {
+        $cacheKey = 'tarifario:cat:index:' . $this->indexCacheVersion($tarifa) . ':' . $tarifa->id . ':' . $params->toCacheKey('v1');
 
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $params) {
             $query = TarifaCategoria::query()->where('tarifa_id', $tarifa->id);
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['codigo', 'nombre']);
+            $this->applyListingSort($query, $params, ['codigo', 'nombre', 'estado'], 'codigo');
 
-            if ($status && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q) {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('nombre', 'ilike', "%{$q}%");
-                });
-            }
-
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-            ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 
@@ -100,11 +98,11 @@ class TarifaCategoriaService
         $key = sprintf('tarifario:cat:lookup:%s:%s', $tarifa->id, $onlyActivas ? '1' : '0');
 
         return Cache::remember($key, self::LOOKUP_CACHE_TTL_SECONDS, function () use ($tarifa, $onlyActivas) {
-            $q = TarifaCategoria::query()
-                ->where('tarifa_id', $tarifa->id)
-                ->when($onlyActivas, fn($x) => $x->where('estado', RecordStatus::ACTIVO->value))
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre', 'estado']);
+            $q = CodigoCorrelativo::orderByCodigoAsc(
+                TarifaCategoria::query()
+                    ->where('tarifa_id', $tarifa->id)
+                    ->when($onlyActivas, fn ($x) => $x->where('estado', RecordStatus::ACTIVO->value))
+            )->get(['id', 'codigo', 'nombre', 'estado']);
 
             return $q->map(fn($c) => [
                 'id' => (int)$c->id,
@@ -117,8 +115,16 @@ class TarifaCategoriaService
 
     public function clearLookupCache(Tarifa $tarifa): void
     {
-        Cache::forget(sprintf('tarifario:cat:lookup:%s:1', $tarifa->id));
-        Cache::forget(sprintf('tarifario:cat:lookup:%s:0', $tarifa->id));
+        self::clearLookupCacheForTarifa((int) $tarifa->id);
+    }
+
+    private function invalidateTarifarioCaches(Tarifa $tarifa): void
+    {
+        self::invalidateIndexCacheForTarifa((int) $tarifa->id);
+        TarifaSubcategoriaService::invalidateIndexCacheForTarifa((int) $tarifa->id);
+        TarifaServicioService::invalidateIndexCacheForTarifa((int) $tarifa->id);
+        TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int) $tarifa->id);
+        $this->clearLookupCache($tarifa);
     }
 
     public function create(Tarifa $tarifa, array $data): TarifaCategoria
@@ -127,7 +133,7 @@ class TarifaCategoriaService
 
         $nombre = trim((string)($data['descripcion'] ?? ''));
         if ($nombre === '') {
-            throw ValidationException::withMessages(['descripcion' => ['La descripción es requerida.']]);
+            throw ValidationException::withMessages(['descripcion' => ['Ingresa la descripción de la categoría.']]);
         }
 
         $existeMismoNombre = TarifaCategoria::query()
@@ -174,7 +180,7 @@ class TarifaCategoriaService
                 201
             );
 
-            $this->clearLookupCache($tarifa);
+            $this->invalidateTarifarioCaches($tarifa);
             return $categoria;
         });
     }
@@ -260,6 +266,13 @@ class TarifaCategoriaService
 
         if (!empty($rows)) {
             DB::table('tarifa_categorias')->insert($rows);
+            foreach (array_unique(array_map(static fn ($row) => (int) $row['tarifa_id'], $rows)) as $tarifaId) {
+                self::invalidateIndexCacheForTarifa($tarifaId);
+                self::clearLookupCacheForTarifa($tarifaId);
+                TarifaSubcategoriaService::invalidateIndexCacheForTarifa($tarifaId);
+                TarifaServicioService::invalidateIndexCacheForTarifa($tarifaId);
+                TarifarioCatalogoService::invalidateServiciosCacheForTarifa($tarifaId);
+            }
         }
 
         return $result;
@@ -318,7 +331,7 @@ class TarifaCategoriaService
                 200
             );
 
-            $this->clearLookupCache($tarifa);
+            $this->invalidateTarifarioCaches($tarifa);
             return $categoria;
         });
     }
@@ -360,7 +373,7 @@ class TarifaCategoriaService
                 200
             );
 
-            $this->clearLookupCache($tarifa);
+            $this->invalidateTarifarioCaches($tarifa);
             return $categoria;
         });
     }

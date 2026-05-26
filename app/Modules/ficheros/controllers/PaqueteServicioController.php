@@ -2,22 +2,25 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Paquete;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\ficheros\requests\PaqueteServiciosSyncRequest;
 use App\Modules\ficheros\services\PaqueteServicioService;
+use Illuminate\Http\Request;
 
 class PaqueteServicioController extends Controller
 {
     public function __construct(private PaqueteServicioService $service) {}
 
-    public function paquetesPorTarifa(Tarifa $tarifa)
+    public function paquetesPorTarifa(Request $request, Tarifa $tarifa)
     {
         $this->authorize('viewAny', Tarifa::class);
-        $rows = $this->service->listPaquetesPorTarifa($tarifa);
+        $params = GridParams::fromRequest($request, ['codigo', 'descripcion', 'precio_sin_igv'], 'codigo');
 
-        return response()->json(['data' => $rows]);
+        return GridResponse::fromPaginator($this->service->paginatePaquetesPorTarifa($tarifa, $params));
     }
 
     public function arbolPorTarifa(Tarifa $tarifa)

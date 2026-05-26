@@ -2,6 +2,8 @@
 
 namespace App\Modules\admision\controllers\pacientes;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Paciente;
 use App\Modules\admision\models\PacientePlan;
@@ -20,17 +22,18 @@ class PacienteController extends Controller
     {
         $this->authorize('viewAny', Paciente::class);
 
-        $p = $this->service->paginate($request->only(['q', 'status', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, [
+            'hc',
+            'nombre_completo',
+            'created_at',
+            'updated_at',
+            'estado',
+            'nr',
+            'sexo',
+            'fecha_nacimiento',
+        ], 'created_at');
 
-        return response()->json([
-            'data' => $p->items(),
-            'meta' => [
-                'current_page' => $p->currentPage(),
-                'per_page' => $p->perPage(),
-                'total' => $p->total(),
-                'last_page' => $p->lastPage(),
-            ],
-        ]);
+        return GridResponse::fromPaginator($this->service->paginate($params));
     }
 
     public function show(Paciente $paciente)
@@ -40,6 +43,20 @@ class PacienteController extends Controller
         $full = $this->service->loadFull($paciente);
 
         return response()->json(['data' => $full]);
+    }
+
+    public function plans(Request $request, Paciente $paciente)
+    {
+        $this->authorize('view', $paciente);
+
+        $params = GridParams::fromRequest($request, [
+            'fecha_afiliacion',
+            'parentesco_seguro',
+            'estado',
+            'id',
+        ], 'id');
+
+        return GridResponse::fromPaginator($this->service->paginatePlans($paciente, $params));
     }
 
     public function store(PacienteStoreRequest $request)

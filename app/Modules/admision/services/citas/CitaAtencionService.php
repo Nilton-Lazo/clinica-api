@@ -4,6 +4,7 @@ namespace App\Modules\admision\services\citas;
 
 use App\Core\audit\AuditService;
 use App\Core\NroCuentaService;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\CitaAtencionEstado;
 use App\Core\support\EstadoFacturacionServicio;
 use App\Core\support\RecordStatus;
@@ -11,7 +12,9 @@ use App\Core\support\SexoPaciente;
 use App\Modules\admision\models\AgendaCita;
 use App\Modules\admision\models\CitaAtencion;
 use App\Modules\admision\models\CitaAtencionServicio;
+use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\Paciente;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -21,6 +24,7 @@ class CitaAtencionService
         private AuditService $audit,
         private NroCuentaService $nroCuentaService,
         private CuentaSyncService $cuentaSyncService,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     public function datosParaAtencion(int $agendaCitaId): array
@@ -49,7 +53,7 @@ class CitaAtencionService
 
         $paciente = $cita->paciente;
         if (!$paciente) {
-            throw ValidationException::withMessages(['cita' => ['Paciente no encontrado.']]);
+            throw ValidationException::withMessages(['cita' => ['La cita no tiene un paciente asociado en historia clínica.']]);
         }
 
         $planes = $paciente->planes ?? collect();
@@ -72,6 +76,13 @@ class CitaAtencionService
         $atencion = CitaAtencion::query()
             ->where('agenda_cita_id', $agendaCitaId)
             ->first();
+        $cuenta = $atencion
+            ? Cuenta::query()
+                ->where('origen', 'CITA_ATENCION')
+                ->where('origen_id', (int) $atencion->id)
+                ->first()
+            : null;
+        $cuentaBloqueada = $this->isCuentaBloqueada($cuenta);
 
         $serviciosPayload = [];
         if ($atencion) {
@@ -187,6 +198,13 @@ class CitaAtencionService
                 'soat_numero_poliza' => $atencion->soat_numero_poliza ? (string)$atencion->soat_numero_poliza : null,
                 'soat_numero_placa' => $atencion->soat_numero_placa ? (string)$atencion->soat_numero_placa : null,
             ] : null,
+            'cuenta' => $cuenta ? [
+                'id' => (int) $cuenta->id,
+                'nro_cuenta' => (string) $cuenta->nro_cuenta,
+                'estado' => $cuenta->estado !== null ? (string) $cuenta->estado : null,
+                'bloqueada' => $cuentaBloqueada,
+            ] : null,
+            'bloqueada_facturacion' => $cuentaBloqueada,
             'servicios' => $serviciosPayload,
         ];
     }
@@ -196,14 +214,15 @@ class CitaAtencionService
         $cita = AgendaCita::query()->with(['paciente.planes' => function ($q) {
             $q->with('tipoCliente:id,codigo,descripcion_tipo_cliente,tarifa_id,iafa_id');
         }])->findOrFail($agendaCitaId);
+        $this->assertCuentaNoCancelada($cita->id);
 
         if ($cita->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['cita' => ['La cita no está activa.']]);
+            throw ValidationException::withMessages(['cita' => ['La cita no está activa y no permite actualizar datos de atención.']]);
         }
 
         $paciente = $cita->paciente;
         if (!$paciente) {
-            throw ValidationException::withMessages(['cita' => ['Paciente no encontrado.']]);
+            throw ValidationException::withMessages(['cita' => ['La cita no tiene un paciente asociado en historia clínica.']]);
         }
 
         $pacientePlanId = isset($data['paciente_plan_id']) ? (int)$data['paciente_plan_id'] : null;
@@ -294,14 +313,15 @@ class CitaAtencionService
     public function guardarAtencion(int $agendaCitaId, array $data): array
     {
         $cita = AgendaCita::query()->with(['paciente'])->findOrFail($agendaCitaId);
+        $this->assertCuentaNoCancelada($cita->id);
 
         if ($cita->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['cita' => ['La cita no está activa.']]);
+            throw ValidationException::withMessages(['cita' => ['La cita no está activa y no permite registrar atención.']]);
         }
 
         $paciente = $cita->paciente;
         if (!$paciente) {
-            throw ValidationException::withMessages(['cita' => ['Paciente no encontrado.']]);
+            throw ValidationException::withMessages(['cita' => ['La cita no tiene un paciente asociado en historia clínica.']]);
         }
 
         $acudio = !empty($data['acudio_a_su_cita']);
@@ -400,6 +420,15 @@ class CitaAtencionService
             $cita->refresh();
             $this->cuentaSyncService->syncFromCitaAtencion($atencion, $cita);
 
+            $this->realtime->entityChanged(
+                module: 'admision',
+                entity: 'agenda_cita',
+                action: 'updated',
+                id: (int) $cita->id,
+                scope: (string) $nroCuenta,
+                metadata: ['nro_cuenta' => $nroCuenta, 'estado_atencion' => $cita->estado_atencion],
+            );
+
             return $this->datosParaAtencion((int)$cita->id);
         });
     }
@@ -452,6 +481,47 @@ class CitaAtencionService
                 'estado_facturacion' => $estadoFacturacion,
             ]);
         }
+    }
+
+    private function assertCuentaNoCancelada(int $agendaCitaId): void
+    {
+        $atencion = CitaAtencion::query()
+            ->where('agenda_cita_id', $agendaCitaId)
+            ->first();
+        if (!$atencion) {
+            return;
+        }
+        $cuenta = Cuenta::query()
+            ->where('origen', 'CITA_ATENCION')
+            ->where('origen_id', (int) $atencion->id)
+            ->first();
+        if (!$cuenta) {
+            return;
+        }
+        if (!$this->isCuentaBloqueada($cuenta)) {
+            return;
+        }
+        throw ValidationException::withMessages([
+            'cuenta' => ['La cuenta está cancelada y facturada. No se permiten modificaciones.'],
+        ]);
+    }
+
+    private function isCuentaBloqueada(?Cuenta $cuenta): bool
+    {
+        if (!$cuenta) {
+            return false;
+        }
+
+        if (strtoupper(trim((string) ($cuenta->estado ?? ''))) === 'CANCELADO') {
+            return true;
+        }
+
+        $nro = trim((string) ($cuenta->nro_cuenta ?? ''));
+        if ($nro === '') {
+            return false;
+        }
+
+        return EmisionComprobanteFacturacion::existeFacturadoraParaCuenta($nro);
     }
 
     private function calcularEdad($fechaNacimiento): ?int

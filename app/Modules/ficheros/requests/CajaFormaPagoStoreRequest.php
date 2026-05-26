@@ -22,6 +22,17 @@ class CajaFormaPagoStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'codigo.unique' => 'Ya existe una forma de pago con ese código.',
+            'codigo.max' => 'El código de la forma de pago no debe superar 50 caracteres.',
+            'descripcion.required' => 'Ingresa la descripción de la forma de pago.',
+            'descripcion.max' => 'La descripción de la forma de pago no debe superar 255 caracteres.',
+            'estado.in' => 'Selecciona un estado válido para la forma de pago.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

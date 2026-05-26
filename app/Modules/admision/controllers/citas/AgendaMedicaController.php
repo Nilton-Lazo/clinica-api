@@ -2,6 +2,7 @@
 
 namespace App\Modules\admision\controllers\citas;
 
+use App\Core\grid\GridParams;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\AgendaCita;
 use App\Modules\admision\requests\citas\AgendaCitaStoreRequest;
@@ -46,7 +47,30 @@ class AgendaMedicaController extends Controller
     {
         $this->authorize('viewAny', AgendaCita::class);
 
-        $filters = $request->only(['fecha', 'especialidad_id', 'medico_id', 'estado_atencion', 'per_page', 'page']);
+        $params = GridParams::fromRequest($request, [
+            'codigo',
+            'hora',
+            'hc',
+            'nr',
+            'paciente_nombre',
+            'cuenta',
+            'motivo',
+            'estado',
+        ], 'hora');
+        $fecha = $request->input('fecha') ?? $params->filter('fecha');
+        $especialidadId = $request->input('especialidad_id') ?? $params->filter('especialidad_id');
+        $medicoId = $request->input('medico_id') ?? $params->filter('medico_id');
+        $estadoAtencion = $request->input('estado_atencion') ?? $params->filter('estado_atencion');
+        $filters = [
+            'fecha' => $fecha,
+            'especialidad_id' => $especialidadId,
+            'medico_id' => $medicoId,
+            'estado_atencion' => $estadoAtencion,
+            'page' => $params->page,
+            'per_page' => $params->perPage,
+            'sort' => $params->sort,
+            'sort_dir' => $params->sortDir,
+        ];
         $res = $this->service->listarCitas($filters);
 
         if (!$res['paginator']) {

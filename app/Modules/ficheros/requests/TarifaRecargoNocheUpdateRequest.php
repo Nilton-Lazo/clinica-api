@@ -20,5 +20,17 @@ class TarifaRecargoNocheUpdateRequest extends FormRequest
             'estado' => ['sometimes', 'string', 'in:ACTIVO,INACTIVO,SUSPENDIDO'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'porcentaje.numeric' => 'El porcentaje del recargo nocturno debe ser numérico.',
+            'porcentaje.min' => 'El porcentaje del recargo nocturno no puede ser menor a 0.',
+            'porcentaje.max' => 'El porcentaje del recargo nocturno no puede superar 100.',
+            'hora_desde.regex' => 'Ingresa una hora de inicio válida para el recargo nocturno.',
+            'hora_hasta.regex' => 'Ingresa una hora de fin válida para el recargo nocturno.',
+            'estado.in' => 'Selecciona un estado válido para el recargo nocturno.',
+        ];
+    }
 }
 

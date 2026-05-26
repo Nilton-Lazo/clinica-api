@@ -6,6 +6,7 @@ use App\Core\audit\Facades\Audit;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class LoginService
@@ -17,9 +18,16 @@ class LoginService
 
     public function login(string $identifier, string $password, ?string $deviceName = null): array
     {
-        $field = filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        $identifier = trim($identifier);
+        $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL) !== false;
+        $field = $isEmail ? 'email' : 'username';
         $select = array_unique(array_merge(self::LOGIN_FIELDS, [$field]));
-        $user = User::where($field, $identifier)->select($select)->first();
+        $user = User::query()
+            ->whereRaw(($isEmail ? 'LOWER(email)' : 'UPPER(username)') . ' = ?', [
+                $isEmail ? Str::lower($identifier) : Str::upper($identifier),
+            ])
+            ->select($select)
+            ->first();
 
         if (!$user || !Hash::check($password, $user->password)) {
             $this->auditLoginFailed($identifier);

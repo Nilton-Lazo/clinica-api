@@ -18,6 +18,15 @@ class CuentaBitacoraNotaStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'contenido.required' => 'Escribe el contenido de la nota de bitácora.',
+            'contenido.string' => 'La nota de bitácora debe ser texto.',
+            'contenido.max' => 'La nota de bitácora no debe superar 4000 caracteres.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         $c = $this->input('contenido');

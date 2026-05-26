@@ -3,7 +3,10 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\CajaMedioPago;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
@@ -11,16 +14,17 @@ use Illuminate\Support\Facades\DB;
 
 class CajaMedioPagoService
 {
+    use AppliesListingQuery;
+
     public function __construct(
         private AuditService $audit,
     ) {}
 
     private function formatCodigo(int $n): string
     {
-        $codigo = str_pad((string) $n, 3, '0', STR_PAD_LEFT);
-        if (strlen($codigo) > 50) {
-            throw new \RuntimeException('No se pudo generar el código: excede 50 caracteres.');
-        }
+        $codigo = CodigoCorrelativo::format($n);
+        CodigoCorrelativo::guardMaxLength($codigo);
+
         return $codigo;
     }
 
@@ -70,44 +74,44 @@ class CajaMedioPagoService
         ];
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int) ($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int) ($filters['page'] ?? 1));
-        $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string) $filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:parametros:caja:medio-pago:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:parametros:caja:medio-pago:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string) $filters['status']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = CajaMedioPago::query()->with('formasPago');
+            $this->applyListingStatus($query, $params);
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('descripcion', 'ilike', "%{$q}%")
-                        ->orWhereHas('formasPago', function ($f) use ($q) {
-                            $f->where('codigo', 'ilike', "%{$q}%")
-                                ->orWhere('descripcion', 'ilike', "%{$q}%");
+            if ($params->q !== null) {
+                $term = $params->q;
+                $query->where(function ($sub) use ($term) {
+                    $sub->where('codigo', 'ilike', "%{$term}%")
+                        ->orWhere('descripcion', 'ilike', "%{$term}%")
+                        ->orWhereHas('formasPago', function ($f) use ($term) {
+                            $f->where('codigo', 'ilike', "%{$term}%")
+                                ->orWhere('descripcion', 'ilike', "%{$term}%");
                         });
                 });
             }
 
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-            ]);
+            $this->applyListingSort($query, $params, ['codigo', 'descripcion', 'estado'], 'codigo');
+
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
+    }
+
+    public function listAllActivosForEmision(int $limit = 2000): array
+    {
+        $limit = max(1, min(5000, $limit));
+
+        $rows = CodigoCorrelativo::orderByCodigoAsc(
+            CajaMedioPago::query()
+                ->with('formasPago')
+                ->where('estado', RecordStatus::ACTIVO->value)
+        )->limit($limit)->get();
+
+        return $rows->map(fn (CajaMedioPago $row) => $this->toPayload($row))->values()->all();
     }
 
     public function create(array $data): array

@@ -2,6 +2,8 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Cliente;
 use App\Modules\ficheros\requests\ClienteStoreRequest;
@@ -17,17 +19,9 @@ class ClienteController extends Controller
     {
         $this->authorize('viewAny', Cliente::class);
 
-        $p = $this->service->paginate($request->only(['q', 'status', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, ['codigo', 'nombre', 'estado'], 'codigo');
 
-        return response()->json([
-            'data' => $p->items(),
-            'meta' => [
-                'current_page' => $p->currentPage(),
-                'per_page' => $p->perPage(),
-                'total' => $p->total(),
-                'last_page' => $p->lastPage(),
-            ],
-        ]);
+        return GridResponse::fromPaginator($this->service->paginate($params));
     }
 
     public function nextCodigo()

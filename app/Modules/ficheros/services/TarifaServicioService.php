@@ -3,7 +3,11 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
+use App\Core\realtime\RealtimeBroadcaster;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\GrupoServicio;
 use App\Modules\admision\models\Tarifa;
 use App\Modules\admision\models\TarifaCategoria;
@@ -16,19 +20,22 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaServicioService
 {
+    use AppliesListingQuery;
+
     public ?PropagacionResultado $lastPropagationResult = null;
 
     public function __construct(
         private AuditService $audit,
         private TarifaCategoriaService $categoriaService,
-        private TarifaSubcategoriaService $subcategoriaService
+        private TarifaSubcategoriaService $subcategoriaService,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     private function assertTarifaActiva(Tarifa $tarifa): void
     {
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa debe estar ACTIVA para operar servicios.'],
+                'tarifa_id' => ['La tarifa seleccionada debe estar activa para gestionar servicios.'],
             ]);
         }
     }
@@ -37,17 +44,14 @@ class TarifaServicioService
     {
         if ((int)$srv->tarifa_id !== (int)$tarifa->id) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['El servicio no pertenece a la tarifa indicada.'],
+                'tarifa_id' => ['El servicio seleccionado no pertenece a la tarifa indicada. Actualiza la pantalla e intenta otra vez.'],
             ]);
         }
     }
 
     private function format2(int $n, string $what): string
     {
-        if ($n < 1 || $n > 99) {
-            throw new \RuntimeException("No se pudo generar el código de {$what}: excede 2 dígitos (01-99).");
-        }
-        return str_pad((string)$n, 2, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($n);
     }
 
     private function normalizeNomenclador(?string $x): ?string
@@ -82,10 +86,10 @@ class TarifaServicioService
             ->first();
 
         if (!$cat) {
-            throw ValidationException::withMessages(['categoria_id' => ['Categoría no existe en esta tarifa.']]);
+            throw ValidationException::withMessages(['categoria_id' => ['La categoría seleccionada no existe en esta tarifa.']]);
         }
         if ($cat->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['categoria_id' => ['La categoría debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['categoria_id' => ['La categoría seleccionada debe estar activa para crear servicios.']]);
         }
 
         $sub = TarifaSubcategoria::query()
@@ -95,10 +99,10 @@ class TarifaServicioService
             ->first();
 
         if (!$sub) {
-            throw ValidationException::withMessages(['subcategoria_id' => ['Subcategoría no existe o no pertenece a la categoría.']]);
+            throw ValidationException::withMessages(['subcategoria_id' => ['La subcategoría seleccionada no existe o no pertenece a la categoría elegida.']]);
         }
         if ($sub->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['subcategoria_id' => ['La subcategoría debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['subcategoria_id' => ['La subcategoría seleccionada debe estar activa para crear servicios.']]);
         }
 
         return [$cat, $sub];
@@ -106,8 +110,8 @@ class TarifaServicioService
 
     public function peekNextCodigo(Tarifa $tarifa, int $categoriaId, int $subcategoriaId): array
     {
-        if ($categoriaId < 1) throw ValidationException::withMessages(['categoria_id' => ['categoria_id es requerido.']]);
-        if ($subcategoriaId < 1) throw ValidationException::withMessages(['subcategoria_id' => ['subcategoria_id es requerido.']]);
+        if ($categoriaId < 1) throw ValidationException::withMessages(['categoria_id' => ['Selecciona una categoría para generar el código de servicio.']]);
+        if ($subcategoriaId < 1) throw ValidationException::withMessages(['subcategoria_id' => ['Selecciona una subcategoría para generar el código de servicio.']]);
 
         [$cat, $sub] = $this->assertCategoriaSubActivas($tarifa, $categoriaId, $subcategoriaId);
 
@@ -131,56 +135,58 @@ class TarifaServicioService
     }
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
+    private const INDEX_CACHE_VERSION_PREFIX = 'tarifario:svc:index:version:';
 
-    public function paginate(Tarifa $tarifa, array $filters): LengthAwarePaginator
+    public static function invalidateIndexCacheForTarifa(int $tarifaId): void
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
+        $key = self::INDEX_CACHE_VERSION_PREFIX . $tarifaId;
+        Cache::put($key, (int) Cache::get($key, 0) + 1, 86400);
+    }
 
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-        $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
-        $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : 0;
-        $grupoCodigo = isset($filters['grupo_codigo']) ? trim((string)$filters['grupo_codigo']) : null;
+    private function indexCacheVersion(Tarifa $tarifa): int
+    {
+        return (int) Cache::get(self::INDEX_CACHE_VERSION_PREFIX . $tarifa->id, 0);
+    }
 
-        $cacheKey = sprintf('tarifario:svc:index:%s:%s:%s:%s:%s:%s:%s:%s', $tarifa->id, $page, $perPage, $q ?? '', $status ?? '', $categoriaId, $subcategoriaId, $grupoCodigo ?? '');
+    private function invalidateTarifarioCaches(Tarifa $tarifa): void
+    {
+        self::invalidateIndexCacheForTarifa((int) $tarifa->id);
+        TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int) $tarifa->id);
+    }
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-            $categoriaId = isset($filters['categoria_id']) ? (int)$filters['categoria_id'] : 0;
-            $subcategoriaId = isset($filters['subcategoria_id']) ? (int)$filters['subcategoria_id'] : 0;
-            $grupoCodigo = isset($filters['grupo_codigo']) ? trim((string)$filters['grupo_codigo']) : null;
+    public function paginate(Tarifa $tarifa, GridParams $params): LengthAwarePaginator
+    {
+        $cacheKey = 'tarifario:svc:index:' . $this->indexCacheVersion($tarifa) . ':' . $tarifa->id . ':' . $params->toCacheKey('v1');
+
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($tarifa, $params) {
+            $categoriaId = (int) ($params->filter('categoria_id') ?? 0);
+            $subcategoriaId = (int) ($params->filter('subcategoria_id') ?? 0);
+            $grupoCodigo = $params->filter('grupo_codigo');
+            $grupoCodigo = is_string($grupoCodigo) ? trim($grupoCodigo) : '';
 
             $query = TarifaServicio::query()->where('tarifa_id', $tarifa->id);
 
-            if ($categoriaId > 0) $query->where('categoria_id', $categoriaId);
-            if ($subcategoriaId > 0) $query->where('subcategoria_id', $subcategoriaId);
-            if ($grupoCodigo !== null && $grupoCodigo !== '') {
+            if ($categoriaId > 0) {
+                $query->where('categoria_id', $categoriaId);
+            }
+            if ($subcategoriaId > 0) {
+                $query->where('subcategoria_id', $subcategoriaId);
+            }
+            if ($grupoCodigo !== '') {
                 $query->where('grupo_codigo', $grupoCodigo);
             }
 
-            if ($status && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['codigo', 'descripcion', 'nomenclador']);
+            $this->applyListingSort(
+                $query,
+                $params,
+                ['codigo', 'descripcion', 'estado', 'precio_sin_igv', 'precio_con_igv', 'unidad'],
+                'codigo',
+                ['precio_con_igv' => 'precio_sin_igv']
+            );
 
-            if ($q) {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('descripcion', 'ilike', "%{$q}%")
-                        ->orWhere('nomenclador', 'ilike', "%{$q}%");
-                });
-            }
-
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-                'categoria_id' => $categoriaId,
-                'subcategoria_id' => $subcategoriaId,
-                'grupo_codigo' => $grupoCodigo,
-            ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 
@@ -190,6 +196,8 @@ class TarifaServicioService
 
         return DB::transaction(function () use ($tarifa, $data) {
             DB::statement('LOCK TABLE tarifa_servicios IN EXCLUSIVE MODE');
+
+            $data['precio_sin_igv'] = round((float) $data['precio_sin_igv'], 4);
 
             $categoriaId = (int)$data['categoria_id'];
             $subcategoriaId = (int)$data['subcategoria_id'];
@@ -207,7 +215,7 @@ class TarifaServicioService
 
                 if ($exists) {
                     throw ValidationException::withMessages([
-                        'nomenclador' => ['El nomenclador ya existe en esta tarifa.'],
+                        'nomenclador' => ['Ya existe un servicio con ese nomenclador en esta tarifa.'],
                     ]);
                 }
             }
@@ -275,6 +283,17 @@ class TarifaServicioService
                 'success',
                 201
             );
+
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifa_servicio',
+                action: 'created',
+                id: (int) $srv->id,
+                scope: (string) $tarifa->id,
+                metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
+            );
+
+            $this->invalidateTarifarioCaches($tarifa);
 
             return $srv;
         });
@@ -420,7 +439,7 @@ class TarifaServicioService
                 }
             }
 
-            TarifaServicio::create([
+            $created = TarifaServicio::create([
                 'tarifa_id' => $t->id,
                 'categoria_id' => $cat->id,
                 'subcategoria_id' => $sub->id,
@@ -436,6 +455,18 @@ class TarifaServicioService
                 'desea_liberar_precio' => $deseaLiberarPrecio,
                 'estado' => $estado,
             ]);
+
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifa_servicio',
+                action: 'created',
+                id: (int) $created->id,
+                scope: (string) $t->id,
+                metadata: ['tarifa_id' => (int) $t->id, 'codigo' => $created->codigo],
+            );
+
+            self::invalidateIndexCacheForTarifa((int) $t->id);
+            TarifarioCatalogoService::invalidateServiciosCacheForTarifa((int) $t->id);
         }
 
         return $result;
@@ -447,6 +478,8 @@ class TarifaServicioService
         $this->assertBelongs($tarifa, $srv);
 
         return DB::transaction(function () use ($tarifa, $srv, $data) {
+            $data['precio_sin_igv'] = round((float) $data['precio_sin_igv'], 4);
+
             $before = $srv->only(['nomenclador', 'descripcion', 'precio_sin_igv', 'unidad', 'grupo_codigo', 'grupo_descripcion', 'grupo_abrev', 'desea_liberar_precio', 'estado']);
 
             $nom = $this->normalizeNomenclador($data['nomenclador'] ?? null);
@@ -459,7 +492,7 @@ class TarifaServicioService
 
                 if ($exists) {
                     throw ValidationException::withMessages([
-                        'nomenclador' => ['El nomenclador ya existe en esta tarifa.'],
+                        'nomenclador' => ['Ya existe otro servicio con ese nomenclador en esta tarifa.'],
                     ]);
                 }
             }
@@ -505,6 +538,17 @@ class TarifaServicioService
                 200
             );
 
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifa_servicio',
+                action: 'updated',
+                id: (int) $srv->id,
+                scope: (string) $tarifa->id,
+                metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
+            );
+
+            $this->invalidateTarifarioCaches($tarifa);
+
             return $srv;
         });
     }
@@ -535,6 +579,17 @@ class TarifaServicioService
                 'success',
                 200
             );
+
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifa_servicio',
+                action: 'disabled',
+                id: (int) $srv->id,
+                scope: (string) $tarifa->id,
+                metadata: ['tarifa_id' => (int) $tarifa->id, 'codigo' => $srv->codigo],
+            );
+
+            $this->invalidateTarifarioCaches($tarifa);
 
             return $srv;
         });

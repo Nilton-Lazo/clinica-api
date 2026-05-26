@@ -2,6 +2,8 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Iafa;
 use App\Modules\ficheros\requests\IafaStoreRequest;
@@ -17,17 +19,9 @@ class IafaController extends Controller
     {
         $this->authorize('viewAny', Iafa::class);
 
-        $p = $this->service->paginate($request->only(['q', 'status', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, ['codigo', 'razon_social', 'estado'], 'codigo');
 
-        return response()->json([
-            'data' => $p->items(),
-            'meta' => [
-                'current_page' => $p->currentPage(),
-                'per_page' => $p->perPage(),
-                'total' => $p->total(),
-                'last_page' => $p->lastPage(),
-            ],
-        ]);
+        return GridResponse::fromPaginator($this->service->paginate($params));
     }
 
     public function nextCodigo()

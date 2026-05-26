@@ -2,6 +2,8 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\Consultorio;
 use App\Modules\ficheros\requests\ConsultorioStoreRequest;
@@ -17,17 +19,9 @@ class ConsultorioController extends Controller
     {
         $this->authorize('viewAny', Consultorio::class);
 
-        $p = $this->service->paginate($request->only(['q', 'status', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, ['abreviatura', 'descripcion', 'estado'], 'abreviatura');
 
-        return response()->json([
-            'data' => $p->items(),
-            'meta' => [
-                'current_page' => $p->currentPage(),
-                'per_page' => $p->perPage(),
-                'total' => $p->total(),
-                'last_page' => $p->lastPage(),
-            ],
-        ]);
+        return GridResponse::fromPaginator($this->service->paginate($params));
     }
 
     public function store(ConsultorioStoreRequest $request)

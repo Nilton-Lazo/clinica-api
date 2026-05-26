@@ -3,6 +3,8 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Tarifa;
 use Illuminate\Support\Facades\DB;
@@ -10,7 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaClonacionService
 {
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+    ) {}
 
     public function cloneFromBase(Tarifa $target, array $payload): array
     {
@@ -20,25 +25,25 @@ class TarifaClonacionService
 
         if (!$base) {
             throw ValidationException::withMessages([
-                'tarifa_base' => ['No existe un tarifario base configurado.'],
+                'tarifa_base' => ['No existe un tarifario base configurado. Marca una tarifa activa como base antes de clonar.'],
             ]);
         }
 
         if ($base->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_base' => ['El tarifario base debe estar ACTIVO.'],
+                'tarifa_base' => ['El tarifario base debe estar activo para clonar categorías, subcategorías y servicios.'],
             ]);
         }
 
         if ($target->tarifa_base) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['No se puede clonar hacia el tarifario base. Seleccione una tarifa operativa.'],
+                'tarifa_id' => ['No se puede clonar hacia el tarifario base. Selecciona una tarifa operativa como destino.'],
             ]);
         }
 
         if ($target->estado !== RecordStatus::ACTIVO->value) {
             throw ValidationException::withMessages([
-                'tarifa_id' => ['La tarifa destino debe estar ACTIVA.'],
+                'tarifa_id' => ['La tarifa destino debe estar activa para recibir la clonación.'],
             ]);
         }
 
@@ -65,12 +70,12 @@ class TarifaClonacionService
                 ->map(fn ($v) => (string)$v)
                 ->all();
 
-            $baseCats = DB::table('tarifa_categorias')
-                ->where('tarifa_id', $baseId)
-                ->whereIn('id', $baseCatIds)
-                ->whereNotIn('codigo', $existingCatCodes)
-                ->orderBy('codigo')
-                ->get(['codigo', 'nombre', 'estado']);
+            $baseCats = CodigoCorrelativo::orderByCodigoAsc(
+                DB::table('tarifa_categorias')
+                    ->where('tarifa_id', $baseId)
+                    ->whereIn('id', $baseCatIds)
+                    ->whereNotIn('codigo', $existingCatCodes)
+            )->get(['codigo', 'nombre', 'estado']);
 
             $catRows = [];
             foreach ($baseCats as $c) {
@@ -291,9 +296,22 @@ class TarifaClonacionService
                 ]
             );                        
 
-            // Evita resultados stale de la grilla izquierda en Facturación->Tarifario
-            // inmediatamente después de clonar al mismo tarifario.
             TarifarioCatalogoService::invalidateServiciosCacheForTarifa($targetId);
+
+            $this->realtime->entityChanged(
+                module: 'facturacion',
+                entity: 'tarifario_clonacion',
+                action: 'cloned',
+                id: $targetId,
+                scope: (string) $targetId,
+                metadata: [
+                    'tarifa_base_id' => $baseId,
+                    'tarifa_target_id' => $targetId,
+                    'categorias' => count($catRows),
+                    'subcategorias' => count($subRows),
+                    'servicios' => count($svcRows),
+                ],
+            );
 
             return $result;
         });

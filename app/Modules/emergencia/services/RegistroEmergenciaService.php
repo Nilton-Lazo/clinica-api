@@ -2,18 +2,31 @@
 
 namespace App\Modules\emergencia\services;
 
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\NroCuentaService;
+use App\Core\support\CodigoCorrelativo;
+use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\CuentaOrigen;
+use App\Modules\admision\models\Cuenta;
 use App\Modules\admision\models\RegistroEmergencia;
+use App\Modules\admision\models\Paciente;
 use App\Modules\admision\services\citas\CuentaSyncService;
+use App\Modules\caja\models\CajaEmisionComprobante;
+use App\Modules\caja\support\EmisionComprobanteFacturacion;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 
 class RegistroEmergenciaService
 {
+    use AppliesListingQuery;
+
     public function __construct(
         private NroCuentaService $nroCuentaService,
         private CuentaSyncService $cuentaSyncService,
+        private RealtimeBroadcaster $realtime,
     ) {}
 
     private const INDEX_CACHE_TTL_SECONDS = 30;
@@ -24,62 +37,112 @@ class RegistroEmergenciaService
         return (int) Cache::get(self::CACHE_VERSION_KEY, 0);
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int) ($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int) ($filters['page'] ?? 1));
-        $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-        $fechaDesde = isset($filters['fecha_desde']) ? trim((string) $filters['fecha_desde']) : null;
-        $fechaHasta = isset($filters['fecha_hasta']) ? trim((string) $filters['fecha_hasta']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('emergencia:registro:index:%s:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $fechaDesde ?? '', $fechaHasta ?? '');
+        $cacheKey = 'emergencia:registro:index:'.$version.':'.$params->toCacheKey('v2');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-            $fechaDesde = isset($filters['fecha_desde']) ? trim((string) $filters['fecha_desde']) : null;
-            $fechaHasta = isset($filters['fecha_hasta']) ? trim((string) $filters['fecha_hasta']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = RegistroEmergencia::query()
-                ->with(['tipoEmergencia:id,codigo,descripcion'])
-                ->orderBy('fecha', 'desc')
-                ->orderBy('orden', 'asc')
-                ->orderBy('id', 'desc');
+                ->with(['tipoEmergencia:id,codigo,descripcion']);
 
-            if ($fechaDesde !== null && $fechaDesde !== '') {
+            $fechaDesde = $params->filter('fecha_desde');
+            $fechaHasta = $params->filter('fecha_hasta');
+            if (is_string($fechaDesde) && $fechaDesde !== '') {
                 $query->whereDate('fecha', '>=', $fechaDesde);
             }
-            if ($fechaHasta !== null && $fechaHasta !== '') {
+            if (is_string($fechaHasta) && $fechaHasta !== '') {
                 $query->whereDate('fecha', '<=', $fechaHasta);
             }
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('orden', 'ilike', "%{$q}%")
-                        ->orWhere('numero_hc', 'ilike', "%{$q}%")
-                        ->orWhere('apellidos_nombres', 'ilike', "%{$q}%")
-                        ->orWhere('numero_cuenta', 'ilike', "%{$q}%");
-                });
+
+            $this->applyListingSearch($query, $params, ['orden', 'numero_hc', 'apellidos_nombres', 'numero_cuenta']);
+
+            $sort = $params->sort ?? 'orden';
+            $allowed = ['orden', 'hora', 'numero_hc', 'numero_cuenta', 'apellidos_nombres', 'sexo', 'topico', 'estado'];
+            if (! in_array($sort, $allowed, true)) {
+                $sort = 'orden';
+            }
+            $dir = $params->sortDir === 'desc' ? 'desc' : 'asc';
+            if ($sort === 'orden') {
+                $query->orderBy('fecha', $dir)->orderBy('orden', $dir);
+            } else {
+                $query->orderBy($sort, $dir);
             }
 
-            $paginator = $query->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'fecha_desde' => $fechaDesde,
-                'fecha_hasta' => $fechaHasta,
-            ]);
+            $paginator = $query->orderBy('id', $dir)->paginate($params->perPage, ['*'], 'page', $params->page);
 
-            $paginator->getCollection()->transform(function ($registro) {
-                $paciente = \App\Modules\admision\models\Paciente::query()
-                    ->select(['id', 'fecha_nacimiento', 'sexo'])
-                    ->where(function ($q) use ($registro) {
-                        $q->where('numero_documento', $registro->numero_hc)
-                          ->orWhere('nr', $registro->numero_hc);
-                    })
-                    ->first();
-                
-                $edad = $paciente ? $paciente->edad : null;
-                $registro->setAttribute('edad_paciente', $edad);
+            $registros = $paginator->getCollection();
+            $historias = $registros
+                ->pluck('numero_hc')
+                ->map(static fn ($value) => trim((string) $value))
+                ->filter(static fn ($value) => $value !== '')
+                ->unique()
+                ->values();
+
+            $pacientes = $historias->isEmpty()
+                ? collect()
+                : Paciente::query()
+                    ->select(['id', 'numero_documento', 'nr', 'fecha_nacimiento', 'sexo'])
+                    ->whereIn('numero_documento', $historias)
+                    ->orWhereIn('nr', $historias)
+                    ->get();
+
+            $pacientesPorClave = [];
+            foreach ($pacientes as $paciente) {
+                foreach (['numero_documento', 'nr'] as $field) {
+                    $key = trim((string) ($paciente->{$field} ?? ''));
+                    if ($key !== '' && ! isset($pacientesPorClave[$key])) {
+                        $pacientesPorClave[$key] = $paciente;
+                    }
+                }
+            }
+
+            $registroIds = $registros->pluck('id')->map(static fn ($id) => (int) $id)->filter()->values();
+            $cuentasPorRegistro = $registroIds->isEmpty()
+                ? collect()
+                : Cuenta::query()
+                    ->select(['id', 'origen_id', 'nro_cuenta', 'estado'])
+                    ->where('origen', CuentaOrigen::REGISTRO_EMERGENCIA->value)
+                    ->whereIn('origen_id', $registroIds)
+                    ->get()
+                    ->keyBy(static fn ($cuenta) => (int) $cuenta->origen_id);
+
+            $nrosCuenta = $registros
+                ->map(function ($registro) use ($cuentasPorRegistro) {
+                    $cuenta = $cuentasPorRegistro->get((int) $registro->id);
+                    return trim((string) ($cuenta?->nro_cuenta ?? $registro->numero_cuenta ?? ''));
+                })
+                ->filter(static fn ($value) => $value !== '')
+                ->unique()
+                ->values();
+
+            $cuentasFacturadas = [];
+            if ($nrosCuenta->isNotEmpty()) {
+                $emisiones = CajaEmisionComprobante::query()
+                    ->select(['id', 'nro_cuenta', 'snapshot'])
+                    ->whereIn('nro_cuenta', $nrosCuenta)
+                    ->orderBy('id')
+                    ->get();
+
+                foreach ($emisiones as $emision) {
+                    $nroCuenta = trim((string) $emision->nro_cuenta);
+                    if ($nroCuenta !== '' && ! EmisionComprobanteFacturacion::esAdelantoGarantia($emision)) {
+                        $cuentasFacturadas[$nroCuenta] = true;
+                    }
+                }
+            }
+
+            $registros->transform(function ($registro) use ($pacientesPorClave, $cuentasPorRegistro, $cuentasFacturadas) {
+                $paciente = $pacientesPorClave[trim((string) $registro->numero_hc)] ?? null;
+                $registro->setAttribute('edad_paciente', $paciente?->edad);
+                $cuenta = $cuentasPorRegistro->get((int) $registro->id);
+                $nroCuenta = trim((string) ($cuenta?->nro_cuenta ?? $registro->numero_cuenta ?? ''));
+                $estadoCuenta = strtoupper(trim((string) ($cuenta?->estado ?? '')));
+
+                if ($estadoCuenta === 'CANCELADO' || ($nroCuenta !== '' && isset($cuentasFacturadas[$nroCuenta]))) {
+                    $registro->setAttribute('estado', 'CANCELADO');
+                }
+
                 return $registro;
             });
 
@@ -92,6 +155,7 @@ class RegistroEmergenciaService
         $fecha = isset($data['fecha']) ? Carbon::parse($data['fecha']) : now();
         $orden = $this->nextOrdenForDateInternal($fecha);
         $numeroCuenta = $this->nroCuentaService->next();
+        $this->ensurePacienteExists((string) $data['numero_hc']);
 
         $record = RegistroEmergencia::create([
             'orden' => $orden,
@@ -134,6 +198,14 @@ class RegistroEmergenciaService
         ]);
         Cache::increment(self::CACHE_VERSION_KEY);
         $this->cuentaSyncService->syncFromRegistroEmergencia($record);
+        $this->realtime->entityChanged(
+            module: 'emergencia',
+            entity: 'registro_emergencia',
+            action: 'created',
+            id: (int) $record->id,
+            scope: (string) $record->numero_cuenta,
+            metadata: ['fecha' => $record->fecha?->format('Y-m-d'), 'numero_cuenta' => $record->numero_cuenta],
+        );
 
         return $record;
     }
@@ -141,6 +213,9 @@ class RegistroEmergenciaService
     public function update(array $data, int $id): RegistroEmergencia
     {
         $record = RegistroEmergencia::query()->findOrFail($id);
+        $this->assertCuentaEditable($record);
+        $numeroHc = (string) ($data['numero_hc'] ?? $record->numero_hc);
+        $this->ensurePacienteExists($numeroHc);
 
         $record->fill([
             'orden' => $data['orden'] ?? $record->orden,
@@ -184,7 +259,16 @@ class RegistroEmergenciaService
 
         $record->save();
         Cache::increment(self::CACHE_VERSION_KEY);
-        $this->cuentaSyncService->syncFromRegistroEmergencia($record->fresh());
+        $fresh = $record->fresh();
+        $this->cuentaSyncService->syncFromRegistroEmergencia($fresh);
+        $this->realtime->entityChanged(
+            module: 'emergencia',
+            entity: 'registro_emergencia',
+            action: 'updated',
+            id: (int) $record->id,
+            scope: (string) $record->numero_cuenta,
+            metadata: ['fecha' => $record->fecha?->format('Y-m-d'), 'numero_cuenta' => $record->numero_cuenta],
+        );
 
         return $record;
     }
@@ -197,7 +281,7 @@ class RegistroEmergenciaService
         $count = RegistroEmergencia::query()
             ->whereDate('fecha', $date->format('Y-m-d'))
             ->count();
-        return str_pad((string) ($count + 1), 3, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($count + 1);
     }
 
     private function nextOrdenForDateInternal(Carbon $fecha): string
@@ -205,6 +289,59 @@ class RegistroEmergenciaService
         $count = RegistroEmergencia::query()
             ->whereDate('fecha', $fecha->format('Y-m-d'))
             ->count();
-        return str_pad((string) ($count + 1), 3, '0', STR_PAD_LEFT);
+        return CodigoCorrelativo::format($count + 1);
+    }
+
+    private function ensurePacienteExists(string $numeroHc): void
+    {
+        $hc = trim($numeroHc);
+        if ($hc === '') {
+            throw ValidationException::withMessages([
+                'numero_hc' => ['Selecciona un paciente antes de guardar el registro de emergencia.'],
+            ]);
+        }
+
+        $exists = Paciente::query()
+            ->where(function ($query) use ($hc) {
+                $query->where('numero_documento', $hc)
+                    ->orWhere('nr', $hc);
+            })
+            ->exists();
+
+        if (!$exists) {
+            throw ValidationException::withMessages([
+                'numero_hc' => ['No se encontró un paciente activo con la historia clínica seleccionada. Busca y selecciona nuevamente al paciente.'],
+            ]);
+        }
+    }
+
+    private function isCuentaCancelada(RegistroEmergencia $registro): bool
+    {
+        $cuenta = Cuenta::query()
+            ->where('origen', CuentaOrigen::REGISTRO_EMERGENCIA->value)
+            ->where('origen_id', (int) $registro->id)
+            ->first();
+
+        if ($cuenta && strtoupper(trim((string) ($cuenta->estado ?? ''))) === 'CANCELADO') {
+            return true;
+        }
+
+        $nro = trim((string) ($cuenta?->nro_cuenta ?? $registro->numero_cuenta ?? ''));
+        if ($nro === '') {
+            return false;
+        }
+
+        return EmisionComprobanteFacturacion::existeFacturadoraParaCuenta($nro);
+    }
+
+    private function assertCuentaEditable(RegistroEmergencia $registro): void
+    {
+        if (! $this->isCuentaCancelada($registro)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'nro_cuenta' => ['La cuenta de emergencia está cancelada y facturada. No se permiten modificaciones.'],
+        ]);
     }
 }

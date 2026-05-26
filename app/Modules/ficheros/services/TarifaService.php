@@ -3,7 +3,10 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Iafa;
 use App\Modules\admision\models\Tarifa;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -13,14 +16,13 @@ use Illuminate\Validation\ValidationException;
 
 class TarifaService
 {
+    use AppliesListingQuery;
+
     public function __construct(private AuditService $audit) {}
 
     private function formatCodigo(int $n): string
     {
-        if ($n < 1000) {
-            return str_pad((string)$n, 3, '0', STR_PAD_LEFT);
-        }
-        return (string)$n;
+        return CodigoCorrelativo::format($n);
     }
 
     private function nextCodigoInt(): int
@@ -53,43 +55,18 @@ class TarifaService
         Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:tarifas:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:tarifas:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = Tarifa::query();
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['codigo', 'descripcion_tarifa']);
+            $this->applyListingSort($query, $params, ['codigo', 'descripcion', 'estado'], 'codigo', ['descripcion' => 'descripcion_tarifa']);
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('descripcion_tarifa', 'ilike', "%{$q}%");
-                });
-            }
-
-            return $query
-                ->orderByRaw('CAST(codigo AS INTEGER) ASC')
-                ->paginate($perPage, ['*'], 'page', $page)
-                ->appends([
-                    'per_page' => $perPage,
-                    'q' => $q,
-                    'status' => $status,
-                ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 

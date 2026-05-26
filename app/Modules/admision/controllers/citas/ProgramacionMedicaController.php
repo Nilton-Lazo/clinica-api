@@ -2,6 +2,8 @@
 
 namespace App\Modules\admision\controllers\citas;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\ProgramacionMedica;
 use App\Modules\admision\requests\citas\ProgramacionMedicaStoreRequest;
@@ -19,17 +21,9 @@ class ProgramacionMedicaController extends Controller
     {
         $this->authorize('viewAny', ProgramacionMedica::class);
 
-        $p = $this->service->paginate($request->only(['from', 'to', 'status', 'q', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, ['codigo', 'fecha', 'cupos', 'estado'], 'fecha');
 
-        return response()->json([
-            'data' => $p->items(),
-            'meta' => [
-                'current_page' => $p->currentPage(),
-                'per_page' => $p->perPage(),
-                'total' => $p->total(),
-                'last_page' => $p->lastPage(),
-            ],
-        ]);
+        return GridResponse::fromPaginator($this->service->paginate($params));
     }
 
     public function nextCodigo(Request $request)

@@ -3,7 +3,10 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Cirugia;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
@@ -11,19 +14,15 @@ use Illuminate\Support\Facades\DB;
 
 class CirugiaService
 {
+    use AppliesListingQuery;
+
     public function __construct(
         private AuditService $audit,
     ) {}
 
     private function formatCodigo(int $n): string
     {
-        $codigo = str_pad((string) $n, 3, '0', STR_PAD_LEFT);
-
-        if (strlen($codigo) > 10) {
-            throw new \RuntimeException('No se pudo generar el código: excede 10 caracteres.');
-        }
-
-        return $codigo;
+        return CodigoCorrelativo::format($n);
     }
 
     private function nextCodigo(): string
@@ -68,40 +67,18 @@ class CirugiaService
         Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int) ($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int) ($filters['page'] ?? 1));
-
-        $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string) $filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:cirugias:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:cirugias:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string) $filters['status']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = Cirugia::query();
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['codigo', 'descripcion']);
+            $this->applyListingSort($query, $params, ['codigo', 'descripcion', 'estado'], 'codigo');
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('descripcion', 'ilike', "%{$q}%");
-                });
-            }
-
-            return $query->orderBy('codigo')->paginate($perPage, ['*'], 'page', $page)->appends([
-                'per_page' => $perPage,
-                'q' => $q,
-                'status' => $status,
-            ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 

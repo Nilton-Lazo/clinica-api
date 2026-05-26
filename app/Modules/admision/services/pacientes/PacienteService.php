@@ -3,6 +3,8 @@
 namespace App\Modules\admision\services\pacientes;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\ParentescoSeguroPaciente;
 use App\Core\support\RecordStatus;
 use App\Core\support\TipoDocumentoPaciente;
@@ -16,6 +18,8 @@ use Illuminate\Validation\ValidationException;
 
 class PacienteService
 {
+    use AppliesListingQuery;
+
     public function __construct(private AuditService $audit) {}
 
     private function formatNr(int $n): string
@@ -68,35 +72,81 @@ class PacienteService
         return [$a, $b];
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
         $query = Paciente::query();
+        $this->applyListingStatus($query, $params);
+        $this->applyListingSearch($query, $params, [
+            'numero_documento',
+            'nr',
+            'nombres',
+            'apellido_paterno',
+            'apellido_materno',
+        ]);
 
-        if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-            $query->where('estado', $status);
+        $filiacionFrom = $params->filter('filiacion_from');
+        $filiacionTo = $params->filter('filiacion_to');
+        if (is_string($filiacionFrom) && $filiacionFrom !== '') {
+            $query->whereDate('created_at', '>=', $filiacionFrom);
+        }
+        if (is_string($filiacionTo) && $filiacionTo !== '') {
+            $query->whereDate('created_at', '<=', $filiacionTo);
         }
 
-        if ($q !== null && $q !== '') {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('numero_documento', 'ilike', "%{$q}%")
-                    ->orWhere('nr', 'ilike', "%{$q}%")
-                    ->orWhere('nombres', 'ilike', "%{$q}%")
-                    ->orWhere('apellido_paterno', 'ilike', "%{$q}%")
-                    ->orWhere('apellido_materno', 'ilike', "%{$q}%");
+        $sort = $params->sort ?? 'created_at';
+        $allowed = ['hc', 'nombre_completo', 'created_at', 'updated_at', 'estado', 'nr', 'sexo', 'fecha_nacimiento'];
+        if (! in_array($sort, $allowed, true)) {
+            $sort = 'created_at';
+        }
+        $dir = $params->sortDir === 'desc' ? 'desc' : 'asc';
+
+        if ($sort === 'hc') {
+            $query->orderBy('numero_documento', $dir)->orderBy('nr', $dir);
+        } elseif ($sort === 'nombre_completo') {
+            $query->orderByRaw("TRIM(CONCAT_WS(' ', apellido_paterno, apellido_materno, nombres)) {$dir}");
+        } else {
+            $query->orderBy($sort, $dir);
+        }
+
+        return $query->orderBy('id', $dir)->paginate($params->perPage, ['*'], 'page', $params->page);
+    }
+
+    public function paginatePlans(Paciente $paciente, GridParams $params): LengthAwarePaginator
+    {
+        $query = PacientePlan::query()
+            ->where('paciente_id', (int) $paciente->id)
+            ->with([
+                'tipoCliente:id,codigo,descripcion_tipo_cliente,iafa_id,contratante_id,tarifa_id',
+                'tipoCliente.tarifa:id,codigo,descripcion_tarifa,es_precio_directo',
+            ]);
+
+        $this->applyListingStatus($query, $params);
+
+        if ($params->q !== null) {
+            $term = $this->listingLikePattern($params->q);
+            $operator = $this->listingLikeOperator($query);
+            $query->where(function ($sub) use ($term, $operator) {
+                $sub->where('parentesco_seguro', $operator, $term)
+                    ->orWhereHas('tipoCliente', function ($tipo) use ($term, $operator) {
+                        $tipo->where('codigo', $operator, $term)
+                            ->orWhere('descripcion_tipo_cliente', $operator, $term)
+                            ->orWhereHas('tarifa', function ($tarifa) use ($term, $operator) {
+                                $tarifa->where('codigo', $operator, $term)
+                                    ->orWhere('descripcion_tarifa', $operator, $term);
+                            });
+                    });
             });
         }
 
+        $sort = $params->sort ?? 'id';
+        if (! in_array($sort, ['fecha_afiliacion', 'parentesco_seguro', 'estado', 'id'], true)) {
+            $sort = 'id';
+        }
+
         return $query
-        ->orderBy('created_at', 'desc')
-        ->orderBy('id', 'desc')
-        ->paginate($perPage)
-        ->appends(['per_page' => $perPage, 'q' => $q, 'status' => $status]);
+            ->orderBy($sort, $params->sortDir)
+            ->orderBy('id', $params->sortDir)
+            ->paginate($params->perPage, ['*'], 'page', $params->page);
     }
 
     private function fullName(Paciente $p): string
@@ -422,7 +472,7 @@ class PacienteService
                 ->first();
 
             if (!$tc) {
-                throw ValidationException::withMessages(['tipo_cliente_id' => ['Tipo de cliente no existe o no está ACTIVO.']]);
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El tipo de cliente seleccionado no existe o no está activo para afiliar planes.']]);
             }
 
             $exists = PacientePlan::query()
@@ -431,7 +481,7 @@ class PacienteService
                 ->exists();
 
             if ($exists) {
-                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene este plan registrado.']]);
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene registrado este plan. Selecciona otro tipo de cliente o edita el plan existente.']]);
             }
 
             $fecha = $data['fecha_afiliacion'] ?? null;
@@ -475,7 +525,7 @@ class PacienteService
                 ->first();
 
             if (!$tc) {
-                throw ValidationException::withMessages(['tipo_cliente_id' => ['Tipo de cliente no existe o no está ACTIVO.']]);
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El tipo de cliente seleccionado no existe o no está activo para actualizar planes.']]);
             }
 
             $exists = PacientePlan::query()
@@ -485,7 +535,7 @@ class PacienteService
                 ->exists();
 
             if ($exists) {
-                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene este plan registrado.']]);
+                throw ValidationException::withMessages(['tipo_cliente_id' => ['El paciente ya tiene registrado este plan. Selecciona otro tipo de cliente o edita el plan existente.']]);
             }
 
             $fecha = $data['fecha_afiliacion'] ?? null;
@@ -549,6 +599,17 @@ class PacienteService
             'contactoEmergencia',
             'planes.tipoCliente.iafa',
             'planes.tipoCliente.tarifa:id,es_precio_directo,codigo,descripcion_tarifa',
+        ]);
+    }
+
+    public function loadForFiliacionReport(Paciente $paciente): Paciente
+    {
+        return $paciente->load([
+            'paisNacionalidad:iso2,nombre',
+            'ubigeoNacimiento:codigo,departamento,provincia,distrito',
+            'ubigeoDomicilio:codigo,departamento,provincia,distrito',
+            'contactoEmergencia',
+            'medicoTratante:id,nombres,apellido_paterno,apellido_materno',
         ]);
     }
 }

@@ -23,6 +23,21 @@ class ConsultorioStoreRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'abreviatura.required' => 'Ingresa la abreviatura del consultorio.',
+            'abreviatura.max' => 'La abreviatura del consultorio no debe superar 10 caracteres.',
+            'abreviatura.regex' => 'La abreviatura del consultorio solo puede contener letras, números, punto, guion o guion bajo.',
+            'abreviatura.unique' => 'Ya existe un consultorio con esa abreviatura.',
+            'descripcion.required' => 'Ingresa la descripción del consultorio.',
+            'descripcion.string' => 'La descripción del consultorio debe ser texto.',
+            'descripcion.max' => 'La descripción del consultorio no debe superar 255 caracteres.',
+            'es_tercero.boolean' => 'Indica si el consultorio es tercero con un valor válido.',
+            'estado.in' => 'El estado del consultorio debe ser ACTIVO o INACTIVO.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (!$this->has('estado') || $this->input('estado') === null || $this->input('estado') === '') {

@@ -2,13 +2,20 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\RecordStatus;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\ServicioDefaultEmergencia;
 use App\Modules\admision\models\Tarifa;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ServicioDefaultEmergenciaController extends Controller
 {
+    public function __construct(
+        private RealtimeBroadcaster $realtime,
+    ) {}
+
     public function show($tarifaId)
     {
         $servicios = ServicioDefaultEmergencia::where('tarifa_id', $tarifaId)
@@ -19,12 +26,30 @@ class ServicioDefaultEmergenciaController extends Controller
 
     public function update(Request $request, $tarifaId)
     {
+        $request->merge(['tarifa_id' => (int) $tarifaId]);
+
         $validated = $request->validate([
-            'servicios' => 'array',
-            'servicios.*' => 'string'
+            'servicios' => ['array'],
+            'servicios.*' => ['string', 'max:50'],
+        ], [
+            'servicios.array' => 'La lista de servicios por defecto no tiene un formato válido.',
+            'servicios.*.string' => 'Cada servicio por defecto debe tener un código válido.',
+            'servicios.*.max' => 'El código de cada servicio por defecto no debe superar 50 caracteres.',
         ]);
 
-        Tarifa::findOrFail($tarifaId);
+        $request->validate([
+            'tarifa_id' => [
+                'required',
+                'integer',
+                Rule::exists('tarifas', 'id')->where('estado', RecordStatus::ACTIVO->value),
+            ],
+        ], [
+            'tarifa_id.required' => 'Selecciona el tarifario para configurar servicios por defecto.',
+            'tarifa_id.integer' => 'Selecciona un tarifario válido.',
+            'tarifa_id.exists' => 'El tarifario seleccionado no existe o está inactivo.',
+        ]);
+
+        Tarifa::where('estado', RecordStatus::ACTIVO->value)->findOrFail($tarifaId);
 
         $servicios = array_values(array_unique($validated['servicios'] ?? []));
 
@@ -42,6 +67,15 @@ class ServicioDefaultEmergenciaController extends Controller
         if (!empty($inserts)) {
             ServicioDefaultEmergencia::insert($inserts);
         }
+
+        $this->realtime->entityChanged(
+            module: 'ficheros',
+            entity: 'servicio_default_emergencia',
+            action: 'updated',
+            id: (int) $tarifaId,
+            scope: (string) $tarifaId,
+            metadata: ['tarifa_id' => (int) $tarifaId, 'total' => count($servicios)],
+        );
 
         return response()->json([
             'data' => $servicios

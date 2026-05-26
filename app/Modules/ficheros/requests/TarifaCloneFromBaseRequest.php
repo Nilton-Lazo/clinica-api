@@ -28,6 +28,22 @@ class TarifaCloneFromBaseRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'clone_all.boolean' => 'Indica si deseas clonar todo con un valor válido.',
+            'categoria_ids.array' => 'La selección de categorías debe enviarse como una lista.',
+            'categoria_ids.*.integer' => 'Cada categoría seleccionada debe tener un identificador válido.',
+            'categoria_ids.*.min' => 'Cada categoría seleccionada debe tener un identificador válido.',
+            'subcategoria_ids.array' => 'La selección de subcategorías debe enviarse como una lista.',
+            'subcategoria_ids.*.integer' => 'Cada subcategoría seleccionada debe tener un identificador válido.',
+            'subcategoria_ids.*.min' => 'Cada subcategoría seleccionada debe tener un identificador válido.',
+            'servicio_ids.array' => 'La selección de servicios debe enviarse como una lista.',
+            'servicio_ids.*.integer' => 'Cada servicio seleccionado debe tener un identificador válido.',
+            'servicio_ids.*.min' => 'Cada servicio seleccionado debe tener un identificador válido.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         $this->merge([
@@ -49,7 +65,7 @@ class TarifaCloneFromBaseRequest extends FormRequest
 
         if (count($cats) === 0 && count($subs) === 0 && count($serv) === 0) {
             throw ValidationException::withMessages([
-                'selection' => ['Debe enviar clone_all=true o al menos una selección (categoria_ids/subcategoria_ids/servicio_ids).'],
+                'selection' => ['Selecciona al menos una categoría, subcategoría o servicio, o usa la opción de clonar todo.'],
             ]);
         }
     }

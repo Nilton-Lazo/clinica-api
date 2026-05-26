@@ -20,4 +20,14 @@ class CirugiaUpdateRequest extends FormRequest
             'estado' => ['required', 'string', Rule::in(RecordStatus::values())],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'descripcion.required' => 'Ingresa la descripción de la cirugía.',
+            'descripcion.max' => 'La descripción de la cirugía no debe superar 255 caracteres.',
+            'estado.required' => 'Selecciona el estado de la cirugía.',
+            'estado.in' => 'Selecciona un estado válido para la cirugía.',
+        ];
+    }
 }

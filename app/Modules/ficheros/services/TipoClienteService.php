@@ -3,7 +3,10 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
 use App\Core\support\RecordStatus;
+use App\Core\support\CodigoCorrelativo;
 use App\Modules\admision\models\Contratante;
 use App\Modules\admision\models\Iafa;
 use App\Modules\admision\models\Tarifa;
@@ -15,14 +18,13 @@ use Illuminate\Validation\ValidationException;
 
 class TipoClienteService
 {
+    use AppliesListingQuery;
+
     public function __construct(private AuditService $audit) {}
 
     private function formatCodigo(int $n): string
     {
-        if ($n < 1000) {
-            return str_pad((string)$n, 3, '0', STR_PAD_LEFT);
-        }
-        return (string)$n;
+        return CodigoCorrelativo::format($n);
     }
 
     private function nextCodigoInt(): int
@@ -55,43 +57,18 @@ class TipoClienteService
         Cache::put(self::CACHE_VERSION_KEY, $this->getListCacheVersion() + 1, 86400);
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int)($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int)($filters['page'] ?? 1));
-
-        $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:tipos_clientes:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:tipos_clientes:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($filters, $perPage, $page) {
-            $q = isset($filters['q']) ? trim((string)$filters['q']) : null;
-            $status = isset($filters['status']) ? trim((string)$filters['status']) : null;
-
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = TipoCliente::query();
+            $this->applyListingStatus($query, $params);
+            $this->applyListingSearch($query, $params, ['codigo', 'descripcion_tipo_cliente']);
+            $this->applyListingSort($query, $params, ['codigo', 'descripcion', 'estado'], 'codigo', ['descripcion' => 'descripcion_tipo_cliente']);
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('descripcion_tipo_cliente', 'ilike', "%{$q}%");
-                });
-            }
-
-            return $query
-                ->orderByRaw('CAST(codigo AS INTEGER) ASC')
-                ->paginate($perPage, ['*'], 'page', $page)
-                ->appends([
-                    'per_page' => $perPage,
-                    'q' => $q,
-                    'status' => $status,
-                ]);
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 
@@ -100,20 +77,20 @@ class TipoClienteService
         $tarifa = Tarifa::query()->find($tarifaId);
 
         if (!$tarifa) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Tarifa no existe.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La tarifa seleccionada no existe o ya no está disponible.']]);
         }
 
         if ($tarifa->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Tarifa debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La tarifa seleccionada debe estar activa para crear tipos de cliente.']]);
         }
 
         if ($tarifa->iafa_id === null) {
-            throw ValidationException::withMessages(['tarifa_id' => ['Esta Tarifa no tiene IAFAS asociada y no puede usarse para Tipos de cliente.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La tarifa seleccionada no tiene IAFAS asociada y no puede usarse para tipos de cliente.']]);
         }
 
         $iafa = Iafa::query()->find($tarifa->iafa_id);
         if (!$iafa || $iafa->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['tarifa_id' => ['La IAFAS asociada a la Tarifa debe estar ACTIVA.']]);
+            throw ValidationException::withMessages(['tarifa_id' => ['La IAFAS asociada a la tarifa debe existir y estar activa para crear tipos de cliente.']]);
         }
 
         return $tarifa;
@@ -124,11 +101,11 @@ class TipoClienteService
         $c = Contratante::query()->find($contratanteId);
 
         if (!$c) {
-            throw ValidationException::withMessages(['contratante_id' => ['Contratante no existe.']]);
+            throw ValidationException::withMessages(['contratante_id' => ['El contratante seleccionado no existe o ya no está disponible.']]);
         }
 
         if ($c->estado !== RecordStatus::ACTIVO->value) {
-            throw ValidationException::withMessages(['contratante_id' => ['Contratante debe estar ACTIVO.']]);
+            throw ValidationException::withMessages(['contratante_id' => ['El contratante seleccionado debe estar activo para crear tipos de cliente.']]);
         }
 
         return $c;
@@ -142,11 +119,11 @@ class TipoClienteService
         $desc = $left . '/' . $right;
 
         if ($left === '' || $right === '') {
-            throw ValidationException::withMessages(['descripcion_tipo_cliente' => ['No se pudo generar la descripción (faltan valores).']]);
+            throw ValidationException::withMessages(['descripcion_tipo_cliente' => ['No se pudo generar la descripción del tipo de cliente porque faltan datos del contratante o la tarifa.']]);
         }
 
         if (mb_strlen($desc) > 255) {
-            throw ValidationException::withMessages(['descripcion_tipo_cliente' => ['La descripción autogenerada supera 255 caracteres.']]);
+            throw ValidationException::withMessages(['descripcion_tipo_cliente' => ['La descripción generada con contratante y tarifa supera 255 caracteres. Reduce alguno de esos nombres.']]);
         }
 
         return $desc;

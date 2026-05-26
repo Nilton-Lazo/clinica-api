@@ -3,8 +3,12 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\Concerns\AppliesListingQuery;
+use App\Core\grid\GridParams;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\CajaNumeracionComprobante;
+use App\Modules\ficheros\support\CajaNumeracionSerie;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 class CajaNumeracionComprobanteService
 {
+    use AppliesListingQuery;
+
     public function __construct(
         private AuditService $audit,
     ) {}
@@ -31,65 +37,56 @@ class CajaNumeracionComprobanteService
 
     private function numeroFormateado(int $numero): string
     {
-        return str_pad((string) max(1, min(9_999_999, $numero)), 7, '0', STR_PAD_LEFT);
+        $safe = max(1, min(9_999_999, $numero));
+
+        return CodigoCorrelativo::format($safe, 'numero_comprobante');
     }
 
-    private function enrichRow(CajaNumeracionComprobante $row): array
+    private function enrichRow(CajaNumeracionComprobante $row, ?int $numeroOverride = null): array
     {
         $tipo = $row->tipoDocumento;
+        $numero = $numeroOverride ?? (int) $row->numero;
+        $numeroFmt = $this->numeroFormateado($numero);
         return [
             'id' => $row->id,
             'tipo_documento_id' => $row->tipo_documento_id,
             'tipo_documento_codigo' => (string) ($tipo?->codigo ?? ''),
             'tipo_documento_descripcion' => (string) ($tipo?->descripcion ?? ''),
             'serie' => (string) $row->serie,
-            'numero' => (int) $row->numero,
-            'numero_formateado' => $this->numeroFormateado((int) $row->numero),
+            'numero' => $numero,
+            'numero_formateado' => $numeroFmt,
             'codigo' => (string) $row->serie,
-            'descripcion' => trim(((string) ($tipo?->descripcion ?? '')).' · '.$this->numeroFormateado((int) $row->numero)),
+            'descripcion' => trim(((string) ($tipo?->descripcion ?? '')).' · '.$numeroFmt),
             'estado' => (string) $row->estado,
             'created_at' => $row->created_at?->toISOString(),
             'updated_at' => $row->updated_at?->toISOString(),
         ];
     }
 
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(GridParams $params): LengthAwarePaginator
     {
-        $perPage = (int) ($filters['per_page'] ?? 50);
-        $perPage = max(1, min(100, $perPage));
-        $page = max(1, (int) ($filters['page'] ?? 1));
-        $q = isset($filters['q']) ? trim((string) $filters['q']) : null;
-        $status = isset($filters['status']) ? trim((string) $filters['status']) : null;
-
         $version = $this->getListCacheVersion();
-        $cacheKey = sprintf('ficheros:parametros:caja:numeracion-comprobante:index:%s:%s:%s:%s:%s', $version, $page, $perPage, $q ?? '', $status ?? '');
+        $cacheKey = 'ficheros:parametros:caja:numeracion-comprobante:index:' . $version . ':' . $params->toCacheKey('v1');
 
-        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($perPage, $page, $q, $status) {
+        return Cache::remember($cacheKey, self::INDEX_CACHE_TTL_SECONDS, function () use ($params) {
             $query = CajaNumeracionComprobante::query()->with('tipoDocumento');
+            $this->applyListingStatus($query, $params);
 
-            if ($status !== null && $status !== '' && in_array($status, RecordStatus::values(), true)) {
-                $query->where('estado', $status);
-            }
-
-            if ($q !== null && $q !== '') {
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('serie', 'ilike', "%{$q}%")
-                        ->orWhereRaw("LPAD(numero::text, 7, '0') ilike ?", ["%{$q}%"])
-                        ->orWhereHas('tipoDocumento', function ($tq) use ($q) {
-                            $tq->where('codigo', 'ilike', "%{$q}%")
-                                ->orWhere('descripcion', 'ilike', "%{$q}%");
+            if ($params->q !== null) {
+                $term = $params->q;
+                $query->where(function ($sub) use ($term) {
+                    $sub->where('serie', 'ilike', "%{$term}%")
+                        ->orWhereRaw("LPAD(numero::text, 7, '0') ilike ?", ["%{$term}%"])
+                        ->orWhereHas('tipoDocumento', function ($tq) use ($term) {
+                            $tq->where('codigo', 'ilike', "%{$term}%")
+                                ->orWhere('descripcion', 'ilike', "%{$term}%");
                         });
                 });
             }
 
-            return $query->orderBy('serie')
-                ->orderBy('numero')
-                ->paginate($perPage, ['*'], 'page', $page)
-                ->appends([
-                    'per_page' => $perPage,
-                    'q' => $q,
-                    'status' => $status,
-                ]);
+            $this->applyListingSort($query, $params, ['serie', 'numero', 'estado'], 'serie');
+
+            return $query->paginate($params->perPage, ['*'], 'page', $params->page);
         });
     }
 
@@ -104,6 +101,14 @@ class CajaNumeracionComprobanteService
 
         $rows = CajaNumeracionComprobante::query()
             ->with('tipoDocumento')
+            ->leftJoin(
+                'caja_numeracion_comprobante_correlativos as cnc',
+                'cnc.numeracion_comprobante_id',
+                '=',
+                'caja_numeraciones_comprobante.id'
+            )
+            ->addSelect('caja_numeraciones_comprobante.*')
+            ->addSelect(DB::raw('COALESCE(cnc.next_numero, caja_numeraciones_comprobante.numero) as emision_numero'))
             ->where('estado', RecordStatus::ACTIVO->value)
             ->orderBy('serie')
             ->orderBy('numero')
@@ -112,7 +117,7 @@ class CajaNumeracionComprobanteService
 
         $out = [];
         foreach ($rows as $row) {
-            $out[] = $this->enrichRow($row);
+            $out[] = $this->enrichRow($row, (int) ($row->emision_numero ?? $row->numero));
         }
 
         return $out;
@@ -136,11 +141,12 @@ class CajaNumeracionComprobanteService
     public function create(array $data): array
     {
         return DB::transaction(function () use ($data) {
-            $this->assertUniqueSerie((int) $data['tipo_documento_id'], (string) $data['serie']);
+            $serie = CajaNumeracionSerie::normalize($data['serie'] ?? null);
+            $this->assertUniqueSerie((int) $data['tipo_documento_id'], $serie);
 
             $row = CajaNumeracionComprobante::create([
                 'tipo_documento_id' => (int) $data['tipo_documento_id'],
-                'serie' => (string) $data['serie'],
+                'serie' => $serie,
                 'numero' => (int) $data['numero'],
                 'estado' => $data['estado'] ?? RecordStatus::ACTIVO->value,
             ]);
@@ -166,11 +172,12 @@ class CajaNumeracionComprobanteService
     {
         return DB::transaction(function () use ($row, $data) {
             $before = $this->enrichRow($row->load('tipoDocumento'));
-            $this->assertUniqueSerie((int) $data['tipo_documento_id'], (string) $data['serie'], (int) $row->id);
+            $serie = CajaNumeracionSerie::normalize($data['serie'] ?? null);
+            $this->assertUniqueSerie((int) $data['tipo_documento_id'], $serie, (int) $row->id);
 
             $row->fill([
                 'tipo_documento_id' => (int) $data['tipo_documento_id'],
-                'serie' => (string) $data['serie'],
+                'serie' => $serie,
                 'numero' => (int) $data['numero'],
                 'estado' => (string) $data['estado'],
             ]);

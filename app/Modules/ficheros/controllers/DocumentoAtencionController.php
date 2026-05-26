@@ -2,6 +2,8 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
+use App\Core\grid\GridResponse;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\DocumentoAtencion;
 use App\Modules\ficheros\requests\DocumentoAtencionStoreRequest;
@@ -13,21 +15,24 @@ class DocumentoAtencionController extends Controller
 {
     public function __construct(private DocumentoAtencionService $service) {}
 
+    public function nextCodigo()
+    {
+        $this->authorize('create', DocumentoAtencion::class);
+
+        return response()->json([
+            'data' => [
+                'codigo' => $this->service->peekNextCodigo(),
+            ],
+        ]);
+    }
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', DocumentoAtencion::class);
 
-        $p = $this->service->paginate($request->only(['q', 'status', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, ['codigo', 'descripcion', 'estado'], 'codigo');
 
-        return response()->json([
-            'data' => $p->items(),
-            'meta' => [
-                'current_page' => $p->currentPage(),
-                'per_page' => $p->perPage(),
-                'total' => $p->total(),
-                'last_page' => $p->lastPage(),
-            ],
-        ]);
+        return GridResponse::fromPaginator($this->service->paginate($params));
     }
 
     public function store(DocumentoAtencionStoreRequest $request)

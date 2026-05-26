@@ -8,9 +8,6 @@ use App\Modules\admision\models\CajaTipoDocumento;
 
 final class ComprobanteEmisionCatalogPayload
 {
-    /**
-     * @return list<string>
-     */
     private static function codigosTiposDocumentoEmision(): array
     {
         $raw = config('caja.emision_tipos_documento_codigos', ['001', '002', '005']);
@@ -61,6 +58,10 @@ final class ComprobanteEmisionCatalogPayload
                 fn (ComprobanteEmisionEstado $c) => ['value' => $c->value, 'label' => $c->label()],
                 ComprobanteEmisionEstado::cases()
             ),
+            'reglas' => [
+                'recibo_caja_tipo_documento_codigo' => trim((string) config('caja.emision_recibo_caja_tipo_documento_codigo', '005')),
+                'adelanto_garantia_servicio_codigo' => trim((string) config('caja.emision_adelanto_garantia_servicio_codigo', '00.18.03')),
+            ],
         ];
     }
 }

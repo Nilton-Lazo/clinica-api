@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\CajaMedioPago;
 use App\Modules\ficheros\requests\CajaMedioPagoStoreRequest;
@@ -16,8 +17,9 @@ class CajaMedioPagoController extends Controller
     public function index(Request $request)
     {
         $this->authorize('viewAny', CajaMedioPago::class);
-        $p = $this->service->paginate($request->only(['q', 'status', 'per_page', 'page']));
-        return response()->json($this->service->serializePage($p));
+        $params = GridParams::fromRequest($request, ['codigo', 'descripcion', 'estado'], 'codigo');
+
+        return response()->json($this->service->serializePage($this->service->paginate($params)));
     }
 
     public function nextCodigo()

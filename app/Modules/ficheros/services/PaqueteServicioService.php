@@ -3,40 +3,45 @@
 namespace App\Modules\ficheros\services;
 
 use App\Core\audit\AuditService;
+use App\Core\grid\GridParams;
+use App\Core\realtime\RealtimeBroadcaster;
+use App\Core\support\CodigoCorrelativo;
 use App\Core\support\RecordStatus;
 use App\Modules\admision\models\Paquete;
 use App\Modules\admision\models\Tarifa;
+use App\Modules\ficheros\queries\PaquetesPorTarifaQuery;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class PaqueteServicioService
 {
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService $audit,
+        private RealtimeBroadcaster $realtime,
+        private PaquetesPorTarifaQuery $paquetesPorTarifaQuery,
+    ) {}
 
-    public function listPaquetesPorTarifa(Tarifa $tarifa): Collection
+    public function paginatePaquetesPorTarifa(Tarifa $tarifa, GridParams $params): LengthAwarePaginator
     {
-        return Paquete::query()
-            ->where('tarifa_id', $tarifa->id)
-            ->where('estado', RecordStatus::ACTIVO->value)
-            ->orderByRaw('CAST(codigo AS INTEGER) ASC')
-            ->get(['id', 'codigo', 'descripcion', 'tarifa_id', 'estado', 'precio_sin_igv']);
+        return $this->paquetesPorTarifaQuery->paginate($tarifa, $params);
     }
 
     public function arbolServiciosPorTarifa(Tarifa $tarifa): array
     {
-        $cats = DB::table('tarifa_categorias')
-            ->where('tarifa_id', (int) $tarifa->id)
-            ->where('estado', RecordStatus::ACTIVO->value)
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
+        $cats = CodigoCorrelativo::orderByCodigoAsc(
+            DB::table('tarifa_categorias')
+                ->where('tarifa_id', (int) $tarifa->id)
+                ->where('estado', RecordStatus::ACTIVO->value)
+        )->get(['id', 'codigo', 'nombre']);
 
-        $subs = DB::table('tarifa_subcategorias')
-            ->where('tarifa_id', (int) $tarifa->id)
-            ->where('estado', RecordStatus::ACTIVO->value)
-            ->orderBy('categoria_id')
-            ->orderBy('codigo')
-            ->get(['id', 'categoria_id', 'codigo', 'nombre']);
+        $subs = CodigoCorrelativo::orderByCodigoAsc(
+            DB::table('tarifa_subcategorias')
+                ->where('tarifa_id', (int) $tarifa->id)
+                ->where('estado', RecordStatus::ACTIVO->value)
+                ->orderBy('categoria_id')
+        )->get(['id', 'categoria_id', 'codigo', 'nombre']);
 
         $servs = DB::table('tarifa_servicios')
             ->where('tarifa_id', (int) $tarifa->id)
@@ -141,7 +146,7 @@ class PaqueteServicioService
 
         if ($valid !== $inputSorted) {
             throw ValidationException::withMessages([
-                'servicio_ids' => ['Uno o más servicios no pertenecen a la tarifa del paquete.'],
+                'servicio_ids' => ['Uno o más servicios seleccionados no pertenecen a la tarifa del paquete o ya no están activos. Actualiza la pantalla e intenta otra vez.'],
             ]);
         }
 
@@ -170,6 +175,21 @@ class PaqueteServicioService
                 ],
                 'success',
                 200
+            );
+
+            $this->realtime->entityChanged(
+                module: 'ficheros',
+                entity: 'paquete_servicio',
+                action: 'updated',
+                id: (int) $paquete->id,
+                scope: (string) $paquete->id,
+                metadata: [
+                    'paquete_id' => (int) $paquete->id,
+                    'tarifa_id' => (int) $paquete->tarifa_id,
+                    'added' => count($added),
+                    'removed' => count($removed),
+                    'total' => count($after),
+                ],
             );
 
             return [

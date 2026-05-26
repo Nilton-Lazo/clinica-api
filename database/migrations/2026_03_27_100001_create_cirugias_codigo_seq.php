@@ -15,11 +15,11 @@ return new class extends Migration
                 GREATEST(
                     COALESCE(
                         (SELECT MAX(codigo::int) FROM cirugias WHERE codigo ~ '^[0-9]+$'),
-                        0
+                        1
                     ),
                     1
                 ),
-                true
+                (SELECT COUNT(*) > 0 FROM cirugias WHERE codigo ~ '^[0-9]+$')
             )
         ");
     }

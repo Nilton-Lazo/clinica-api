@@ -7,6 +7,7 @@ use App\Modules\admision\models\CajaFormaPago;
 use App\Modules\caja\services\ReporteIngresosCajaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ReporteIngresosCajaController extends Controller
 {
@@ -18,7 +19,25 @@ class ReporteIngresosCajaController extends Controller
     {
         $this->authorize('viewAny', CajaFormaPago::class);
 
-        return response()->json($this->service->bootstrap($request->user()));
+        $v = $request->validate([
+            'aperturas_page' => ['sometimes', 'integer', 'min:1'],
+            'aperturas_per_page' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'sort' => ['sometimes', 'nullable', 'string', Rule::in(ReporteIngresosCajaService::APERTURAS_SORT_COLUMNS)],
+            'sort_dir' => ['sometimes', 'string', 'in:asc,desc'],
+        ], [
+            'sort.in' => 'No se puede ordenar la tabla de aperturas por esa columna. Usa otro encabezado de la tabla.',
+            'sort_dir.in' => 'El sentido de ordenamiento debe ser ascendente o descendente.',
+        ]);
+
+        $page = isset($v['aperturas_page']) ? (int) $v['aperturas_page'] : null;
+        $perPage = isset($v['aperturas_per_page']) ? (int) $v['aperturas_per_page'] : null;
+        $sort = isset($v['sort']) ? trim((string) $v['sort']) : null;
+        if ($sort === '') {
+            $sort = null;
+        }
+        $sortDir = isset($v['sort_dir']) ? (string) $v['sort_dir'] : 'desc';
+
+        return response()->json($this->service->bootstrap($request->user(), $page, $perPage, $sort, $sortDir));
     }
 
     public function movimientos(Request $request): JsonResponse
@@ -28,12 +47,34 @@ class ReporteIngresosCajaController extends Controller
         $v = $request->validate([
             'caja_apertura_id' => ['required', 'integer', 'exists:caja_aperturas,id'],
             'numeracion_id' => ['nullable', 'string', 'max:32'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'sort' => ['sometimes', 'nullable', 'string', Rule::in(ReporteIngresosCajaService::MOVIMIENTOS_SORT_COLUMNS)],
+            'sort_dir' => ['sometimes', 'string', 'in:asc,desc'],
+        ], [
+            'caja_apertura_id.required' => 'Selecciona una apertura de caja para consultar movimientos.',
+            'caja_apertura_id.integer' => 'Selecciona una apertura de caja válida.',
+            'caja_apertura_id.exists' => 'La apertura de caja seleccionada no existe.',
+            'numeracion_id.string' => 'La serie del comprobante debe ser texto.',
+            'numeracion_id.max' => 'La serie del comprobante no debe superar 32 caracteres.',
+            'sort.in' => 'No se puede ordenar movimientos de caja por esa columna. Usa otro encabezado de la tabla.',
+            'sort_dir.in' => 'El sentido de ordenamiento debe ser ascendente o descendente.',
         ]);
+
+        $sort = isset($v['sort']) ? trim((string) $v['sort']) : null;
+        if ($sort === '') {
+            $sort = null;
+        }
+        $sortDir = isset($v['sort_dir']) ? (string) $v['sort_dir'] : 'asc';
 
         $data = $this->service->movimientos(
             $request->user(),
             (int) $v['caja_apertura_id'],
-            isset($v['numeracion_id']) ? trim((string) $v['numeracion_id']) : null
+            isset($v['numeracion_id']) ? trim((string) $v['numeracion_id']) : null,
+            isset($v['page']) ? (int) $v['page'] : 1,
+            isset($v['per_page']) ? (int) $v['per_page'] : 10,
+            $sort,
+            $sortDir,
         );
 
         return response()->json(['data' => $data]);

@@ -2,6 +2,7 @@
 
 namespace App\Modules\ficheros\controllers;
 
+use App\Core\grid\GridParams;
 use App\Http\Controllers\Controller;
 use App\Modules\admision\models\CajaBancoTarjeta;
 use App\Modules\ficheros\requests\CajaBancoTarjetaStoreRequest;
@@ -17,9 +18,9 @@ class CajaBancoTarjetaController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', CajaBancoTarjeta::class);
-        $p = $this->service->paginate($request->only(['q', 'status', 'per_page', 'page']));
+        $params = GridParams::fromRequest($request, ['codigo', 'descripcion', 'estado'], 'codigo');
 
-        return response()->json($this->service->serializePage($p));
+        return response()->json($this->service->serializePage($this->service->paginate($params)));
     }
 
     public function mediosDisponibles(Request $request): JsonResponse
